@@ -1,0 +1,86 @@
+// Archetype-specific reactions to negotiation tactics. They are mixed with the generic lines in lines.ts.
+
+export type ReactionKey = 'charmWin' | 'charmFail' | 'hardWin' | 'hardFail' | 'storyWin' | 'storyFail';
+
+export const REACTIONS: Record<string, Partial<Record<ReactionKey, string[]>>> = {
+  yuppie: {
+    charmWin: ['Du hast recht, ich bin ein Gewinnertyp. Das steht sogar auf meiner Visitenkarte.'],
+    charmFail: ['Schmeichelei ist kein Geschäftsmodell. Hab ich in Harvard gelernt. Also, in einem Buch über Harvard.'],
+    hardWin: ['Respekt. Du verhandelst wie ein Wall-Street-Hai. Willst du meine Karte?'],
+    hardFail: ['So redet man nicht mit jemandem, der ein Ziegelstein-Handy besitzt!'],
+    storyWin: ['Wenn das stimmt, ist das ja eine Wertanlage! Ich ruf sofort meinen Broker an.'],
+    storyFail: ['Ich hab im Wirtschaftsteil gelesen, dass Leute wie du lügen. Also, sinngemäß.'],
+  },
+  rentner: {
+    charmWin: ['Ach Gottchen, Sie erinnern mich an meinen Enkel. Der ruft auch nie an.'],
+    charmFail: ['Junger Mann, bei mir in Ohio sagt man sowas nicht beim Autokauf.'],
+    hardWin: ['Na schön. Ich hab keine Zeit für sowas, um vier gibts Early-Bird-Dinner.'],
+    hardFail: ['Ich hab den Koreakrieg überlebt, mich beeindruckt so ein Ton nicht!'],
+    storyWin: ['Wirklich? Das muss ich Martha erzählen! Martha! ...Ach, die ist im Hotel.'],
+    storyFail: ['Ich bin alt, aber nicht von gestern. Naja. Von vorgestern vielleicht.'],
+  },
+  aerobic: {
+    charmWin: ['Danke! Das sind drei Stunden Jane-Fonda-Video am Tag! Und Stretch-Leggings.'],
+    charmFail: ['Ich bin hier zum Autokaufen, nicht zum Flirten. Flirten ist dienstags im Studio.'],
+    hardWin: ['Okay, okay! Mach mal locker. Und eins, und zwei, und ein bisschen Rabatt...'],
+    hardFail: ['Du hast eine total negative Aura. Die blockiert mein Chi. Und meine Brieftasche.'],
+    storyWin: ['Den hatte Olivia Newton-John? "Let\'s get physical"! Ich nehme ihn!'],
+    storyFail: ['Ja klar, und meine Stulpen sind aus echtem Kaschmir.'],
+  },
+  rocker: {
+    charmWin: ['Hehe, die Matte ist geil, oder? Vorne Business, hinten Party, Alter.'],
+    charmFail: ['Laber nicht so schleimig, Mann. Das ist voll uncool.'],
+    hardWin: ['Boah, du bist ja voll Heavy Metal drauf. Respekt, Mann. Okay.'],
+    hardFail: ['Ey, nicht so aggro, sonst kriegste mein Mixtape nie zu hören!'],
+    storyWin: ['Den hat Bon Jovi gefahren?! Das ist ja voll der Hammer! Wahnsinn!'],
+    storyFail: ['Laber nicht, Alter. Das glaub ich dir nicht mal bekifft.'],
+  },
+  pate: {
+    charmWin: ['Du hast Manieren. Das gefällt mir. Das gefällt auch meinen... Geschäftspartnern.'],
+    charmFail: ['Ich hab schon Leute für weniger Schleim in die Bucht geworfen. Nur ein Witz. Oder?'],
+    hardWin: ['Du hast Mut, mein Freund. Mut gefällt mir. Ein bisschen.'],
+    hardFail: ['So spricht niemand mit mir. NIEMAND. Mein Neffe Vinnie wird darüber nicht glücklich sein.'],
+    storyWin: ['Ein berühmter Wagen? Bene. Ich mag Dinge mit Geschichte. Und ohne Zeugen.'],
+    storyFail: ['Mich anlügen? Mich? Das hat zuletzt ein Mann namens Tony probiert. Ich vermisse Tony nicht.'],
+  },
+  tourist: {
+    charmWin: ['Oh, how nice! Die Amerikaner sind so freundlich! Ganz anders als in Castrop-Rauxel.'],
+    charmFail: ['Ich verstehe nur Bahnhof. Ist das hier so üblich? Steht nicht im Reiseführer.'],
+    hardWin: ['Na gut, na gut. Ich bin im Urlaub, ich will keinen Streit. Ich hab Sonnenbrand.'],
+    hardFail: ['Das schreibe ich alles auf die Postkarte nach Hause! Mit Ausrufezeichen!'],
+    storyWin: ['Den kenn ich aus dem Fernsehen! Glaube ich! Wahnsinn, das glaubt mir zu Hause keiner!'],
+    storyFail: ['Ich bin Tourist, nicht doof. Das hat mir schon der Mann mit den Uhren am Strand erzählt.'],
+  },
+  surfer: {
+    charmWin: ['Duuude. Du hast voll die gute Welle heute. Ich fühl das.'],
+    charmFail: ['Mann, das klingt so... gezwungen. Lass es fließen, Bro.'],
+    hardWin: ['Okay, Bro, keine Panik. Wir reiten die Welle zusammen. Ein bisschen runter.'],
+    hardFail: ['Whoa, total schlechte Vibes, Mann. Ich muss erstmal paddeln gehen.'],
+    storyWin: ['Kein Witz? Der war mit beim Pipeline-Contest? Radikal, Mann!'],
+    storyFail: ['Nee, Bro. Selbst ich merk das. Und ich hab heute schon fünf Mal Seetang gegessen.'],
+  },
+  cop: {
+    charmWin: ['Hmm. Sie sind kooperativ. Das notiere ich. Positiv. Diesmal.'],
+    charmFail: ['Versuchen Sie, einen Beamten zu bestechen? Mit KOMPLIMENTEN? ...Weiter.'],
+    hardWin: ['Okay, Sie halten dicht. Gefällt mir. Ich hätte Sie gern als Informanten.'],
+    hardFail: ['Vorsicht, Freundchen. Ich habe eine Dienstmarke und keinen Sinn für Humor.'],
+    storyWin: ['Interessant. War das Fahrzeug in einen Fall verwickelt? Dann will ich es erst recht!'],
+    storyFail: ['Ich verhöre seit 12 Jahren Leute. Sie lügen gerade. Und schlecht.'],
+  },
+  disco: {
+    charmWin: ['Oh Darling, das weiß ich doch! Aber sag es ruhig nochmal. Lauter.'],
+    charmFail: ['Süßer, mich haben schon bessere Männer angeflirtet. Im Studio 54. Mit Glitzer.'],
+    hardWin: ['Ooh, so streng! Na gut, weil du so süß böse guckst.'],
+    hardFail: ['Ich lasse mich nicht anschreien! Das darf nur mein Choreograf!'],
+    storyWin: ['Der war im Video von Madonna?! Ich wusste es, der hat so eine Aura!'],
+    storyFail: ['Schätzchen, ich lebe im Nachtleben. Ich erkenne eine Lüge im Dunkeln. Mit Sonnenbrille.'],
+  },
+  nerd: {
+    charmWin: ['Oh. Äh. Danke. Das hat noch niemand zu mir gesagt. Außer meinem C64.'],
+    charmFail: ['Laut meinen Berechnungen ist das eine Verkaufstaktik. Wahrscheinlichkeit: 98,4 %.'],
+    hardWin: ['Okay, okay. Ich rechne nochmal nach. ...Du hast recht. Leider.'],
+    hardFail: ['Fehler 404: Freundlichkeit nicht gefunden. Das ist ein Witz aus der Zukunft.'],
+    storyWin: ['Wahnsinn! Das gibt mindestens +5 auf Coolness. Ich speichere das auf Diskette.'],
+    storyFail: ['Ich habe das im BTX nachgeschaut. Das stimmt nicht. Also, ich würde, wenn es schneller lädt.'],
+  },
+};

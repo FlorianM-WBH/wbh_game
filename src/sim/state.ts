@@ -38,6 +38,8 @@ export interface Customer {
   spot: number;
   /** set once they have been talked to (no second chance after a failed deal) */
   served: boolean;
+  /** buyers only: an upgrade id they hope the car has (optional for old saves) */
+  wish?: string | null;
 }
 
 export interface Job {
@@ -91,6 +93,8 @@ export interface GameState {
   rng: number;
   negotiation: Negotiation | null;
   events: SimEvent[];
+  /** bitmask of finished first-steps tips (see src/tutorial.ts); optional for old saves */
+  tips?: number;
 }
 
 export function nextId(s: GameState): number {

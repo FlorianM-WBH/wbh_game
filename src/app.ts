@@ -2,10 +2,13 @@
 import { ARCHETYPE_BY_ID } from './content/archetypes';
 import { CLASS_LABEL, MODEL_BY_ID } from './content/models';
 import { BUILDINGS, TECHS } from './content/progression';
+import { UPGRADE_REMARKS } from './content/remarks';
 import { COMPONENTS, COMPONENT_LABEL, UPGRADES, UPGRADE_BY_ID } from './content/workshop';
 import { drawCharacter } from './art/charArt';
 import { customerLook } from './art/textures';
-import { sfx, toggleMute } from './audio';
+import { sfx, toggleMusic, toggleMute } from './audio';
+import { startMusic } from './music';
+import { currentTip, TIPS } from './tutorial';
 import { archetypeOf } from './sim/customers';
 import { dailyRent, freeSlot, lotCapacity, lotCars, marketValue, repairQuote, upgradeQuote } from './sim/economy';
 import { deserialize, endDay, newGame, serialize, tick } from './sim/game';
@@ -38,6 +41,7 @@ export class App {
   /** set by the scene while the player holds the action key at the lift */
   helping = false;
   private wonShown = false;
+  tipsHidden = false;
 
   constructor(ui: UI) {
     this.ui = ui;
@@ -46,7 +50,13 @@ export class App {
       if (e.key === 'm' || e.key === 'M') {
         if (!this.ui.isOpen) this.ui.toast(toggleMute() ? 'Ton aus' : 'Ton an');
       }
+      if ((e.key === 'h' || e.key === 'H') && !this.ui.isOpen) this.tipsHidden = !this.tipsHidden;
+      if (e.key === 'n' || e.key === 'N') {
+        if (!this.ui.isOpen) this.ui.toast(toggleMusic() ? 'Musik an' : 'Musik aus');
+      }
     });
+    // browsers only allow audio after a user gesture
+    for (const ev of ['keydown', 'pointerdown'] as const) window.addEventListener(ev, () => startMusic(), { once: true });
   }
 
   attachScene(scene: SceneHooks): void {
@@ -451,8 +461,9 @@ export class App {
     const prefs = a.classes.map((k) => CLASS_LABEL[k]).join(', ');
     const knows = hasTech(s, 'menschenkenner');
     const cars = lotCars(s);
+    const wish = c.wish ? UPGRADE_BY_ID[c.wish] : null;
     const options: MenuOption[] = cars.map((car) => ({
-      label: `Zeigen: ${MODEL_BY_ID[car.modelId].name}`,
+      label: `Zeigen: ${MODEL_BY_ID[car.modelId].name}${wish && car.upgrades.includes(wish.id) ? ' ★' : ''}`,
       desc: `Wert ${formatMoney(marketValue(car))} · investiert ${formatMoney(car.invested)}`,
       action: () => {
         const r = pitchReaction(s, c.id, car.id);
@@ -471,7 +482,8 @@ export class App {
       sub: a.label,
       body:
         `<p>„${esc(extra ?? this.greeting(c.id))}“</p>` +
-        `<p>Sucht vermutlich: <b>${esc(prefs)}</b></p>` +
+        (wish && !extra ? `<p>„${esc(UPGRADE_REMARKS[wish.id].wish[c.lookSeed % UPGRADE_REMARKS[wish.id].wish.length])}“</p>` : '') +
+        `<p>Sucht vermutlich: <b>${esc(prefs)}</b>${wish ? ` · Wunsch: <span class="tag">${esc(wish.name)}</span>${wish.tech && !hasTech(s, wish.tech) ? ' <span class="sub">(noch nicht freigeschaltet)</span>' : ''}` : ''}</p>` +
         (knows
           ? `<p>Menschenkenntnis: steht auf ${a.likes.map((t) => `<span class="tag">${t}</span>`).join('')} · Budget etwa ${formatMoney(c.budget)}</p>`
           : '') +
@@ -500,9 +512,19 @@ export class App {
   }
 
   private hudHtml = '';
+  private tipsHtml = '';
+
+  renderTips(): void {
+    const cur = this.started && !this.tipsHidden ? currentTip(this.state) : null;
+    const html = cur
+      ? `<div class="t">Nächster Schritt: ${cur.tip.title}<span class="n">${cur.index + 1}/${TIPS.length}</span></div>${cur.tip.text}`
+      : '';
+    if (html !== this.tipsHtml) this.ui.tips.innerHTML = this.tipsHtml = html;
+  }
 
   renderHud(): void {
     const s = this.state;
+    this.renderTips();
     if (!this.started) {
       if (this.hudHtml) this.ui.hud.innerHTML = this.hudHtml = '';
       return;

@@ -31,6 +31,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, h
 export class UI {
   readonly root: HTMLElement;
   readonly hud: HTMLElement;
+  readonly tips: HTMLElement;
   private prompt: HTMLElement;
   private toasts: HTMLElement;
   private overlay: HTMLElement | null = null;
@@ -44,8 +45,9 @@ export class UI {
     this.prompt = h('div', 'prompt');
     this.prompt.style.display = 'none';
     this.toasts = h('div', 'toasts');
-    const help = h('div', 'help', '<span class="key">WASD</span>/Pfeile laufen · <span class="key">E</span>/Leertaste benutzen (an der Hebebühne halten = mit anpacken) · <span class="key">M</span> Ton');
-    root.append(this.hud, this.prompt, this.toasts, help);
+    this.tips = h('div', 'tips');
+    const help = h('div', 'help', '<span class="key">WASD</span>/Pfeile laufen · <span class="key">E</span>/Leertaste benutzen (an der Hebebühne halten = mit anpacken) · <span class="key">M</span> Ton · <span class="key">N</span> Musik · <span class="key">H</span> Tipps');
+    root.append(this.hud, this.tips, this.prompt, this.toasts, help);
     window.addEventListener('keydown', (e) => {
       if (this.keyHandler && this.keyHandler(e)) {
         e.preventDefault();

@@ -1,12 +1,45 @@
 // Tiny WebAudio synth for sound effects. No audio files needed.
+// Shared context with two buses (sfx, music) under one master gain, so mute and music toggle are instant.
 
 let ctx: AudioContext | null = null;
-let muted = false;
+let master: GainNode | null = null;
+let sfxBus: GainNode | null = null;
+let musicBus: GainNode | null = null;
 
-function ac(): AudioContext | null {
-  if (muted) return null;
+const PREFS_KEY = 'miami-motors-86-audio';
+const prefs = loadPrefs();
+
+function loadPrefs(): { muted: boolean; music: boolean } {
   try {
-    ctx ??= new AudioContext();
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
+    return { muted: !!p.muted, music: p.music !== false };
+  } catch {
+    return { muted: false, music: true };
+  }
+}
+
+function savePrefs(): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage may be unavailable */
+  }
+}
+
+/** The audio context, created lazily (browsers only allow it after a user gesture). */
+export function audioContext(): AudioContext | null {
+  try {
+    if (!ctx) {
+      ctx = new AudioContext();
+      master = ctx.createGain();
+      master.gain.value = prefs.muted ? 0 : 1;
+      master.connect(ctx.destination);
+      sfxBus = ctx.createGain();
+      sfxBus.connect(master);
+      musicBus = ctx.createGain();
+      musicBus.gain.value = prefs.music ? 1 : 0;
+      musicBus.connect(master);
+    }
     if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch {
@@ -14,9 +47,15 @@ function ac(): AudioContext | null {
   }
 }
 
+export function musicOutput(): GainNode | null {
+  audioContext();
+  return musicBus;
+}
+
 function tone(freq: number, start: number, dur: number, type: OscillatorType = 'square', vol = 0.06): void {
-  const a = ac();
-  if (!a) return;
+  if (prefs.muted) return;
+  const a = audioContext();
+  if (!a || !sfxBus) return;
   const o = a.createOscillator();
   const g = a.createGain();
   o.type = type;
@@ -25,7 +64,7 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = '
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(vol, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(a.destination);
+  o.connect(g).connect(sfxBus);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
@@ -65,7 +104,28 @@ export function sfx(name: Sfx): void {
   }
 }
 
+function ramp(node: GainNode | null, to: number): void {
+  if (!node || !ctx) return;
+  node.gain.cancelScheduledValues(ctx.currentTime);
+  node.gain.setTargetAtTime(to, ctx.currentTime, 0.05);
+}
+
+/** Toggle all sound. Returns true if now muted. */
 export function toggleMute(): boolean {
-  muted = !muted;
-  return muted;
+  prefs.muted = !prefs.muted;
+  savePrefs();
+  ramp(master, prefs.muted ? 0 : 1);
+  return prefs.muted;
+}
+
+/** Toggle the music only. Returns true if music is now on. */
+export function toggleMusic(): boolean {
+  prefs.music = !prefs.music;
+  savePrefs();
+  ramp(musicBus, prefs.music ? 1 : 0);
+  return prefs.music;
+}
+
+export function musicEnabled(): boolean {
+  return prefs.music && !prefs.muted;
 }

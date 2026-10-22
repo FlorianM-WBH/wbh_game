@@ -1,8 +1,11 @@
 // Haggling. 'sale' = dealer sells a lot car to a buyer; 'purchase' = dealer buys a seller's car.
 import { MODEL_BY_ID } from '../content/models';
+import { UPGRADE_BY_ID } from '../content/workshop';
 import { LINES, type LineKey } from '../content/lines';
-import { archetypeOf, buyerLimit, carFit, removeCustomer, sellerLimit } from './customers';
-import { freeSlot } from './economy';
+import { CONDITION_REMARKS, UPGRADE_REMARKS } from '../content/remarks';
+import { REACTIONS, type ReactionKey } from '../content/reactions';
+import { archetypeOf, buyerLimit, carFit, removeCustomer, sellerLimit, wishMet } from './customers';
+import { freeSlot, overallCondition } from './economy';
 import { chance, pick, randRange } from './rng';
 import { buildingLevel, carById, customerById, emit, formatMoney, hasTech, type GameState } from './state';
 
@@ -46,6 +49,13 @@ function say(s: GameState, key: LineKey, vars: Record<string, string> = {}): str
   return t;
 }
 
+/** Tactic reaction: archetype-specific line when there is one (most of the time), otherwise generic. */
+function react(s: GameState, archetypeId: string, key: ReactionKey): string {
+  const own = REACTIONS[archetypeId]?.[key];
+  if (own?.length && chance(s, 0.7)) return pick(s, own);
+  return say(s, key);
+}
+
 function round50(n: number): number {
   return Math.max(50, Math.round(n / 50) * 50);
 }
@@ -71,7 +81,20 @@ export function pitchReaction(s: GameState, customerId: number, carId: number): 
   const { fit } = carFit(c, car);
   const name = MODEL_BY_ID[car.modelId].name;
   const key: LineKey = fit === 'good' ? 'carFits' : fit === 'meh' ? 'carMeh' : 'carBad';
-  return { fit, line: say(s, key, { car: name }) };
+  const parts = [say(s, key, { car: name })];
+  if (fit === 'bad') return { fit, line: parts[0] };
+  const met = wishMet(c, car);
+  if (met !== null && c.wish) parts.push(pick(s, met ? UPGRADE_REMARKS[c.wish].have : UPGRADE_REMARKS[c.wish].missing));
+  else {
+    // no wish: maybe praise an extra that matches their taste
+    const a = archetypeOf(c);
+    const liked = car.upgrades.filter((u) => UPGRADE_BY_ID[u].tags.some((t) => a.likes.includes(t)));
+    if (liked.length) parts.push(pick(s, UPGRADE_REMARKS[pick(s, liked)].praise));
+  }
+  const cond = overallCondition(car);
+  const ck = cond < 35 ? 'wreck' : cond < 55 ? 'poor' : cond >= 92 ? 'mint' : null;
+  if (ck) parts.push(pick(s, CONDITION_REMARKS[ck]).split('{car}').join(name));
+  return { fit, line: parts.join(' ') };
 }
 
 export function startSale(s: GameState, customerId: number, carId: number): Negotiation | null {
@@ -245,30 +268,30 @@ export function useTactic(s: GameState, t: Tactic): NegotiationStep {
     n.log.push({ who: 'player', text: say(s, 'playerCharm') });
     if (chance(s, Math.min(0.95, a.charmable * boost))) {
       n.mood += 20 * boost;
-      line = say(s, 'charmWin');
+      line = react(s, a.id, 'charmWin');
     } else {
       n.mood -= 5;
-      line = say(s, 'charmFail');
+      line = react(s, a.id, 'charmFail');
     }
   } else if (t === 'hard') {
     n.log.push({ who: 'player', text: say(s, 'playerHard') });
     if (chance(s, Math.min(0.9, (1 - a.charmable * 0.5) * 0.75 * boost))) {
       const lim = effectiveLimit(n);
       n.theirOffer = round50(n.theirOffer + (lim - n.theirOffer) * 0.5);
-      line = say(s, 'hardWin') + ` Na gut: ${formatMoney(n.theirOffer)}.`;
+      line = react(s, a.id, 'hardWin') + ` Na gut: ${formatMoney(n.theirOffer)}.`;
     } else {
       n.mood -= 20;
-      line = say(s, 'hardFail');
+      line = react(s, a.id, 'hardFail');
     }
   } else {
     n.log.push({ who: 'player', text: say(s, sale ? 'playerStoryBuy' : 'playerStorySell') });
     if (chance(s, a.gullible)) {
       n.limit = Math.round(n.limit * (sale ? 1.12 : 0.88));
-      line = say(s, 'storyWin');
+      line = react(s, a.id, 'storyWin');
     } else {
       n.mood -= 30;
       n.patience--;
-      line = say(s, 'storyFail');
+      line = react(s, a.id, 'storyFail');
     }
   }
   n.mood = Math.max(0, Math.min(100, n.mood));

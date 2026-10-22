@@ -1,7 +1,7 @@
 // Customer generation: who arrives, what they want, and the cars sellers bring.
 import { ARCHETYPES, ARCHETYPE_BY_ID, type Archetype } from '../content/archetypes';
 import { MODELS, type CarModel } from '../content/models';
-import { COMPONENTS, type Component } from '../content/workshop';
+import { COMPONENTS, UPGRADES, type Component } from '../content/workshop';
 import { carTags, freeSlot, lotCars, marketValue, showroomBonus } from './economy';
 import { chance, pick, pickWeighted, rand, randInt, randRange } from './rng';
 import { buildingLevel, emit, hasTech, nextId, type Car, type Customer, type GameState, type Intent } from './state';
@@ -63,6 +63,13 @@ function chooseIntent(s: GameState): Intent | null {
   return chance(s, pSell) ? 'sell' : 'buy';
 }
 
+/** About half the buyers want a specific extra that matches their taste; unlocked extras are wished for more often. */
+function chooseWish(s: GameState, a: Archetype): string | null {
+  const fits = UPGRADES.filter((u) => u.tags.some((t) => a.likes.includes(t)));
+  if (!fits.length || !chance(s, 0.5)) return null;
+  return pickWeighted(s, fits, (u) => (u.tech === null || hasTech(s, u.tech) ? 3 : 1)).id;
+}
+
 export function spawnCustomer(s: GameState, forceIntent?: Intent): Customer | null {
   const intent = forceIntent ?? chooseIntent(s);
   if (!intent) return null;
@@ -88,6 +95,7 @@ export function spawnCustomer(s: GameState, forceIntent?: Intent): Customer | nu
     waitLeft: randRange(s, 130, 200) + (buildingLevel(s, 'kaffeebar') > 0 ? 60 : 0),
     spot,
     served: false,
+    wish: intent === 'buy' ? chooseWish(s, a) : null,
   };
   if (intent === 'sell') {
     const car = makeCar(s, modelForArchetype(s, a), rand(s));
@@ -125,8 +133,21 @@ export function carFit(c: Customer, car: Car): { fit: Fit; score: number; liked:
   let score = idx === 0 ? 1.1 : idx > 0 ? 1 : 0.3;
   const liked = carTags(car).filter((t) => a.likes.includes(t)).length;
   score += 0.25 * liked;
+  if (wishMet(c, car)) score += 0.3;
   const fit: Fit = score >= 1 ? 'good' : score >= 0.5 ? 'meh' : 'bad';
   return { fit, score, liked };
+}
+
+/** true / false if the buyer has a wish and the car does / does not fulfil it; null without a wish. */
+export function wishMet(c: Customer, car: Car): boolean | null {
+  if (!c.wish) return null;
+  return car.upgrades.includes(c.wish);
+}
+
+/** Price factor from the buyer's wish: a fulfilled wish is worth a lot, a missing one a little. */
+export function wishFactor(c: Customer, car: Car): number {
+  const met = wishMet(c, car);
+  return met === null ? 1 : met ? 1.15 : 0.95;
 }
 
 /** Highest price a buyer would pay for this car, before mood. */
@@ -134,7 +155,7 @@ export function buyerLimit(s: GameState, c: Customer, car: Car, fudge: number): 
   const a = archetypeOf(c);
   const { score, liked } = carFit(c, car);
   const showroom = showroomBonus(s);
-  const want = marketValue(car) * a.valuation * fudge * Math.min(1.2, 0.7 + 0.3 * score) * (1 + 0.1 * liked) * showroom;
+  const want = marketValue(car) * a.valuation * fudge * Math.min(1.2, 0.7 + 0.3 * score) * (1 + 0.1 * liked) * wishFactor(c, car) * showroom;
   return Math.round(Math.min(want, c.budget));
 }
 

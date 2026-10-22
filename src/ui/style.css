@@ -155,6 +155,32 @@ body {
   }
 }
 
+.tips {
+  position: absolute;
+  right: 0.8em;
+  top: 2.6em;
+  width: 19em;
+  padding: 0.45em 0.7em;
+  background: rgba(20, 10, 36, 0.82);
+  border: 1px solid var(--cyan);
+  border-radius: 0.4em;
+  box-shadow: 0 0 10px rgba(60, 240, 224, 0.35);
+  font-size: 0.8em;
+}
+.tips:empty {
+  display: none;
+}
+.tips .t {
+  color: var(--cyan);
+  font-weight: bold;
+  margin-bottom: 0.2em;
+}
+.tips .n {
+  color: var(--dim);
+  float: right;
+  font-weight: normal;
+}
+
 .help {
   position: absolute;
   left: 0.8em;

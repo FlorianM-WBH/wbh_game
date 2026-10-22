@@ -24,6 +24,7 @@ export function newGame(seed = Date.now()): GameState {
     rng: seed | 0,
     negotiation: null,
     events: [],
+    tips: 0,
   };
   // starting stock: one tired hatchback and one cardboard joke
   const golfo = makeCar(s, MODEL_BY_ID.golfo, 0.55);

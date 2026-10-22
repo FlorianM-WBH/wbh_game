@@ -4,6 +4,7 @@ import type { App, Target } from './app';
 import { tick } from './sim/game';
 import { spawnCustomer } from './sim/customers';
 import type { Intent } from './sim/state';
+import { analyseMusic } from './music';
 
 export function installDebug(app: App, game: Phaser.Game): void {
   const lot = () => game.scene.getScene('lot') as unknown as { player: { x: number; y: number } };
@@ -36,6 +37,7 @@ export function installDebug(app: App, game: Phaser.Game): void {
       app.flush();
       return c?.id ?? null;
     },
+    analyseMusic,
     menuTitle: () => (document.querySelector('[data-menu]') as HTMLElement | null)?.dataset.menu ?? null,
   };
 }

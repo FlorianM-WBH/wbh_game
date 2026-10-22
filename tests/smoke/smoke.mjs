@@ -55,10 +55,18 @@ try {
   await page.screenshot({ path: path.join(out, '01-title.png') });
   check((await page.evaluate(() => window.__mm.menuTitle())) === 'title', 'title screen shown');
 
+  // music: render 8 s offline and check it is audible but does not clip
+  const mus = await page.evaluate(() => window.__mm.analyseMusic(8));
+  check(mus.rms > 0.02 && mus.peak < 1, `music renders (rms ${mus.rms.toFixed(3)}, peak ${mus.peak.toFixed(2)})`);
+
   await page.evaluate(() => window.__mm.newGame(1234));
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(out, '02-start.png') });
   check((await page.evaluate(() => window.__mm.state.cars.length)) === 2, 'new game has two starting cars');
+  check(
+    (await page.evaluate(() => document.querySelector('.tips')?.textContent ?? '')).includes('Auto ankaufen'),
+    'first-steps tip shown',
+  );
 
   // walk with the keyboard and check the player moved
   const before = await page.evaluate(() => ({ ...window.__mm.app.scene.player }));
@@ -151,6 +159,30 @@ try {
   await page.screenshot({ path: path.join(out, '12-repairing.png') });
   await page.evaluate(() => window.__mm.advance(300));
   check((await page.evaluate(() => window.__mm.state.stats.repairsDone)) >= 1, 'repair finished');
+  await page.waitForTimeout(100);
+  check(
+    (await page.evaluate(() => document.querySelector('.tips')?.textContent ?? '')).includes('Auto verkaufen'),
+    'tips advance to selling',
+  );
+
+  // a buyer with a wish: the customer menu names it
+  const wishText = await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.customers = [];
+    let id = null;
+    for (let i = 0; i < 40; i++) {
+      id = mm.spawn('buy');
+      if (mm.state.customers.find((c) => c.id === id)?.wish) break;
+      mm.state.customers = [];
+    }
+    mm.interact({ kind: 'customer', customerId: id });
+    return document.querySelector('.overlay')?.textContent ?? '';
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, '12b-wish.png') });
+  check(wishText.includes('Wunsch:'), 'buyer wish shown in the customer menu');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
 
   // evening
   await page.evaluate(() => window.__mm.advance(560));
