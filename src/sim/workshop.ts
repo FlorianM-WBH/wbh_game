@@ -3,6 +3,9 @@ import { UPGRADE_BY_ID, UPGRADES, type Component, COMPONENT_LABEL } from '../con
 import { MODEL_BY_ID } from '../content/models';
 import { freeSlot, repairQuote, upgradeQuote } from './economy';
 import { carById, emit, hasTech, type GameState, type Job } from './state';
+import { pick } from './rng';
+
+export const PASTELS = ['#ff9ad0', '#7af0e0', '#c8a0ff', '#fff08a', '#9ad8ff'];
 
 export type ActionResult = { ok: true } | { ok: false; reason: string };
 
@@ -79,6 +82,7 @@ export function tickLift(s: GameState, minutes: number, boost = 1): void {
     emit(s, { type: 'toast', text: `${COMPONENT_LABEL[job.target as Component]} repariert: ${MODEL_BY_ID[car.modelId].name}` });
   } else {
     car.upgrades.push(job.target);
+    if (job.target === 'pastell') car.color = pick(s, PASTELS);
     s.stats.upgradesDone++;
     emit(s, { type: 'toast', text: `${UPGRADE_BY_ID[job.target].name} eingebaut!` });
   }

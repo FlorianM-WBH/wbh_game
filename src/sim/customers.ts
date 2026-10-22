@@ -85,7 +85,7 @@ export function spawnCustomer(s: GameState, forceIntent?: Intent): Customer | nu
     budget,
     carId: null,
     sellFactor: randRange(s, 0.58, 0.85),
-    waitLeft: randRange(s, 90, 150) + (buildingLevel(s, 'kaffeebar') > 0 ? 60 : 0),
+    waitLeft: randRange(s, 130, 200) + (buildingLevel(s, 'kaffeebar') > 0 ? 60 : 0),
     spot,
     served: false,
   };
@@ -112,7 +112,7 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
       emit(s, { type: 'carRemoved', carId: car.id });
     }
   }
-  emit(s, { type: 'customerLeft', customerId: id, reason });
+  emit(s, { type: 'customerLeft', customerId: id, name: c.name, reason });
 }
 
 export type Fit = 'good' | 'meh' | 'bad';
