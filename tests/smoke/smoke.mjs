@@ -68,6 +68,15 @@ try {
   const after = await page.evaluate(() => ({ x: window.__mm.app.scene.player.x, y: window.__mm.app.scene.player.y }));
   check(after.y > before.y + 5, `player walks (y ${before.y.toFixed(1)} -> ${after.y.toFixed(1)})`);
 
+  // real keyboard interaction: stand at the office door and press E
+  await page.evaluate(() => window.__mm.teleport(92, 112));
+  await page.waitForTimeout(100);
+  await page.keyboard.press('e');
+  await page.waitForTimeout(200);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'Büro', 'E at the office door opens the office');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+
   // let customers arrive
   await page.evaluate(() => window.__mm.advance(90));
   await page.waitForTimeout(3500);

@@ -67,6 +67,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   private walkT = 0;
   private target: Target | null = null;
   private lastLook = '';
+  /** set on key-down so even very short taps register */
+  private actPressed = false;
 
   constructor() {
     super('lot');
@@ -102,6 +104,12 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       e: kb.addKey(K.E, false),
       space: kb.addKey(K.SPACE, false),
     };
+
+    const onAct = (_k: unknown, e: KeyboardEvent) => {
+      if (!e.repeat) this.actPressed = true;
+    };
+    this.keys.e.on('down', onAct);
+    this.keys.space.on('down', onAct);
 
     this.time.addEvent({ delay: 2600, loop: true, callback: () => this.spawnTraffic() });
     this.app.attachScene(this);
@@ -386,7 +394,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     // interaction
     this.target = free ? this.findTarget() : null;
     const act = this.keys.e.isDown || this.keys.space.isDown;
-    const justAct = Phaser.Input.Keyboard.JustDown(this.keys.e) || Phaser.Input.Keyboard.JustDown(this.keys.space);
+    const justAct = this.actPressed;
+    this.actPressed = false;
     const atLift = this.target?.kind === 'station' && this.target.id === 'lift';
     this.app.helping = free && atLift && act && !!this.app.state.lift.job;
     if (justAct && this.target && !(atLift && this.app.state.lift.job)) this.app.interact(this.target);
