@@ -229,10 +229,94 @@ try {
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(out, '17-service-car-leaves.png') });
 
+  // price tag: tag a lot car through its menu, then a browsing buyer walks up to it
+  const tagCar = await page.evaluate(() => window.__mm.state.cars.find((c) => c.loc.kind === 'lot')?.id);
+  await page.evaluate((id) => window.__mm.interact({ kind: 'car', carId: id }), tagCar);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('2');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'Preisschild', 'price tag menu opens');
+  await page.screenshot({ path: path.join(out, '18-price-tag-menu.png') });
+  await page.keyboard.press('5');
+  await page.waitForTimeout(150);
+  check((await page.evaluate((id) => window.__mm.state.cars.find((c) => c.id === id)?.price ?? null, tagCar)) != null, 'price tag set');
+  await page.keyboard.press('Escape');
+  const browsed = await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.customers = [];
+    for (let i = 0; i < 4; i++) mm.spawn('buy');
+    for (const c of mm.state.customers) c.waitLeft = 999;
+    for (let i = 0; i < 240; i++) {
+      mm.advance(1);
+      if (mm.state.customers.some((c) => c.eyeing != null)) return true;
+    }
+    return false;
+  });
+  check(browsed, 'a buyer walks up to the tagged car');
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: path.join(out, '19-buyer-browsing.png') });
+  const rejected = await page.evaluate(() => {
+    const mm = window.__mm;
+    for (let i = 0; i < 60; i++) {
+      mm.advance(1);
+      if (mm.state.customers.some((c) => c.rejected?.length) || (mm.state.stats.tagSales ?? 0) > 0) return true;
+    }
+    return false;
+  });
+  check(rejected, 'the buyer decides on the tag price');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(out, '19b-buyer-decides.png') });
+
+  // dealer auction at the computer
+  await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.money = 80000;
+    mm.state.techs.push('auktion');
+    mm.state.cars = mm.state.cars.filter((c) => c.loc.kind !== 'lot' || c.loc.slot < 2);
+    mm.app.scene.rebuildAll();
+  });
+  await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'computer' }));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'BTX-Händlerauktion', 'auction opens from the computer');
+  await page.screenshot({ path: path.join(out, '20-auction.png') });
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.state.stats.auctionBuys)) === 1, 'car bought at the auction');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: path.join(out, '21-auction-car-delivered.png') });
+
+  // loan shark from the office
+  await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'office' }));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('2');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, '22-loan-shark.png') });
+  check((await page.evaluate(() => window.__mm.state.debt)) === 2000, 'borrowed from the loan shark');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+
   // evening
   await page.evaluate(() => window.__mm.advance(560));
   await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(out, '18-evening-or-summary.png') });
+  await page.screenshot({ path: path.join(out, '23-evening-or-summary.png') });
+
+  // heavy debt at closing: game over, then a fresh game
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    window.__mm.state.debt = 70000;
+    window.__mm.advance(800);
+  });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(out, '24-game-over.png') });
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'GAME OVER', 'heavy debt ends the game');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  check((await page.evaluate(() => !window.__mm.state.over && window.__mm.state.day === 1)), 'game over leads to a new game');
 
   check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
   await browser.close();

@@ -73,6 +73,21 @@ body {
 .hud .money.neg {
   color: var(--bad);
 }
+.hud .rep {
+  color: var(--yellow);
+  letter-spacing: -0.05em;
+}
+.hud .rep i {
+  font-style: normal;
+  color: #5a3a7a;
+  text-shadow: none;
+}
+.hud .debt {
+  color: #ff9a6a;
+}
+.hud .debt.neg {
+  color: var(--bad);
+}
 .hud .clock {
   color: var(--cyan);
 }

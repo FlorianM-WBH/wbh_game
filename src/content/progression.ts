@@ -23,6 +23,7 @@ export const TECHS: Tech[] = [
   { id: 'rhetorik', name: 'Verkaufsseminar "Übertreiben"', cost: 2000, requires: [], branch: 'verkauf', desc: 'Neue Taktik: maßlos übertreiben.' },
   { id: 'menschenkenner', name: 'Menschenkenntnis', cost: 3000, requires: ['rhetorik'], branch: 'verkauf', desc: 'Zeigt die Vorlieben von Kunden.' },
   { id: 'charmeoffensive', name: 'Charme-Offensive', cost: 6000, requires: ['menschenkenner'], branch: 'verkauf', desc: 'Charme und Härte wirken doppelt so gut.' },
+  { id: 'auktion', name: 'BTX-Händlerauktion', cost: 4000, requires: [], branch: 'verkauf', desc: 'Am Computer täglich Autos ersteigern – ganz ohne Verkäufer. Bildschirmtext, Baby!' },
   { id: 'radio', name: 'Radiowerbung', cost: 3000, requires: [], branch: 'marketing', desc: '"Miami Motors – wir sind billig, aber nicht billig!" +30% Kunden.' },
   { id: 'tvspot', name: 'TV-Werbespot', cost: 12000, requires: ['radio'], branch: 'marketing', desc: 'Du im Werbespot, mit Explosion. +40% Kunden, reichere Kunden.' },
 ];

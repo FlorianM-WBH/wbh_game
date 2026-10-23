@@ -39,6 +39,11 @@ export const TIPS: Tip[] = [
     text: 'An der <b>Bürotür</b>: „Firma ausbauen“. Mehr Stellplätze, Showroom, Neon!',
     done: (s) => BUILDINGS.some((b) => buildingLevel(s, b.id) > 0),
   },
+  {
+    title: 'Preisschild anbringen',
+    text: 'Drück <span class="key">E</span> an einem Auto auf dem Hof: „Preisschild anbringen“. Käufer schauen es sich dann selbst an und zahlen ohne Feilschen.',
+    done: (s) => s.cars.some((c) => c.price != null) || (s.stats.tagSales ?? 0) > 0,
+  },
 ];
 
 /** Marks finished tips in the state and returns the first open one (null when all are done). */

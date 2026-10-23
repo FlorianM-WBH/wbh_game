@@ -5,6 +5,9 @@ import { customerRate, dailyRent } from './economy';
 import { randRange } from './rng';
 import { DAY_END, DAY_START, SAVE_VERSION, emit, type GameState } from './state';
 import { tickLift } from './workshop';
+import { settleDebt } from './finance';
+import { tickBrowsing } from './market';
+import { overnightRep } from './reputation';
 
 export function newGame(seed = Date.now()): GameState {
   const s: GameState = {
@@ -25,6 +28,8 @@ export function newGame(seed = Date.now()): GameState {
     negotiation: null,
     events: [],
     tips: 0,
+    rep: 50,
+    debt: 0,
   };
   // starting stock: one tired hatchback and one cardboard joke
   const golfo = makeCar(s, MODEL_BY_ID.golfo, 0.55);
@@ -49,9 +54,10 @@ export interface TickOptions {
 
 /** Advance the world by `minutes` of game time. Time does not pass during negotiations. */
 export function tick(s: GameState, minutes: number, opts: TickOptions = {}): void {
-  if (s.negotiation) return;
+  if (s.negotiation || s.over) return;
   s.minute += minutes;
   tickLift(s, minutes, opts.workBoost ?? 1);
+  tickBrowsing(s, minutes);
 
   for (const c of [...s.customers]) {
     c.waitLeft -= minutes;
@@ -75,7 +81,9 @@ export function endDay(s: GameState): void {
   const rent = dailyRent(s);
   s.money -= rent;
   s.ledger.expenses += rent;
-  emit(s, { type: 'dayEnded', day: s.day, ledger: { ...s.ledger }, rent });
+  const { interest, bailout } = settleDebt(s);
+  overnightRep(s);
+  emit(s, { type: 'dayEnded', day: s.day, ledger: { ...s.ledger }, rent, interest, bailout });
   s.day++;
   s.minute = DAY_START;
   s.ledger = { income: 0, expenses: 0, sold: 0, bought: 0 };

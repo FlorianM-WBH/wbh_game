@@ -64,6 +64,9 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   private ghosts: NpcView[] = [];
   private tint!: Phaser.GameObjects.Rectangle;
   private sparks!: Phaser.GameObjects.Graphics;
+  private tags!: Phaser.GameObjects.Graphics;
+  /** short-lived speech bubbles (customer id -> text and expiry in scene time) */
+  private says = new Map<number, { text: string; until: number }>();
   private walkT = 0;
   private target: Target | null = null;
   private lastLook = '';
@@ -88,6 +91,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
 
     this.player = this.add.sprite(PLAYER_START.x, PLAYER_START.y, 'player', 0).setOrigin(0.5, 1);
     this.sparks = this.add.graphics().setDepth(5000);
+    this.tags = this.add.graphics().setDepth(4000);
     this.tint = this.add.rectangle(0, 0, WORLD_W, WORLD_H, 0xff6a3c, 0).setOrigin(0).setDepth(9000);
 
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -167,8 +171,15 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   }
 
   private npcHome(customerId: number): Pt {
-    const c = customerById(this.app.state, customerId);
+    const s = this.app.state;
+    const c = customerById(s, customerId);
     if (!c || c.spot < 0) return BUYIN_SELLER;
+    const eyed = carById(s, c.eyeing);
+    if (eyed && eyed.loc.kind === 'lot') {
+      // stand in the aisle next to the car they are looking at
+      const p = SLOTS[eyed.loc.slot];
+      return { x: p.x + 12, y: eyed.loc.slot >= 6 ? p.y - 20 : p.y + 30 };
+    }
     return WAIT_SPOTS[c.spot];
   }
 
@@ -264,6 +275,16 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
             const v = this.addNpc(c.id, { x: side, y: SIDEWALK_Y });
             v.path = [ENTRANCE, { x: ENTRANCE.x, y: AISLE_Y }, { x: home.x, y: AISLE_Y }, home];
           }
+          break;
+        }
+        case 'customerSays':
+          this.says.set(e.customerId, { text: e.text, until: this.time.now + 5000 });
+          break;
+        case 'customerMoved': {
+          const v = this.npcs.get(e.customerId);
+          if (!v) break;
+          const home = this.npcHome(e.customerId);
+          v.path = [{ x: v.spr.x, y: AISLE_Y }, { x: home.x, y: AISLE_Y }, home];
           break;
         }
         case 'customerLeft': {
@@ -497,6 +518,17 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
         v.glow.setDepth(v.spr.depth - 0.5).setAlpha(0.55 + 0.25 * Math.sin(t * 3 + id));
       }
     }
+    // price tags: a little swinging yellow card on the windscreen
+    this.tags.clear();
+    for (const [id, v] of this.cars) {
+      const car = carById(this.app.state, id);
+      if (!car || car.loc.kind !== 'lot' || car.price == null || v.moving) continue;
+      const x = Math.round(v.spr.x + 5);
+      const y = Math.round(v.spr.y - 6 + Math.sin(t * 2 + id) * 0.6);
+      this.tags.fillStyle(0x1a0a2a, 1).fillRect(x - 1, y - 1, 9, 7);
+      this.tags.fillStyle(0xffe03c, 1).fillRect(x, y, 7, 5);
+      this.tags.fillStyle(0x2a8a3a, 1).fillRect(x + 2, y + 1, 1, 3).fillRect(x + 4, y + 1, 1, 3);
+    }
     // welding sparks while a job runs
     this.sparks.clear();
     if (this.app.state.lift.job && this.app.started && !this.app.ui.isOpen) {
@@ -539,13 +571,16 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     // bubbles over customers
     for (const [id, v] of this.npcs) {
       const c = customerById(s, id);
-      const show = c && v.visible && !v.path.length && !ui.isOpen && !(this.target?.kind === 'customer' && this.target.customerId === id);
+      const said = this.says.get(id);
+      if (said && said.until < this.time.now) this.says.delete(id);
+      const show = c && v.visible && (!v.path.length || said) && !ui.isOpen && !(this.target?.kind === 'customer' && this.target.customerId === id);
       if (!show) {
         ui.setBubble(`c${id}`, null);
         continue;
       }
       const sp = toScreen(v.spr.x, v.spr.y - CHAR_H - 1);
-      const text = c.waitLeft < 30 ? 'Wird ungeduldig!' : c.intent === 'buy' ? 'Will kaufen' : c.intent === 'sell' ? 'Verkauft Auto' : c.service?.accepted ? `Abholung ${formatTime(c.service.due)}` : 'Werkstatt-Auftrag';
+      const eyed = c.eyeing != null ? carById(s, c.eyeing) : undefined;
+      const text = said && said.until >= this.time.now ? `„${said.text}“` : c.waitLeft < 30 ? 'Wird ungeduldig!' : eyed ? `Schaut: ${MODEL_BY_ID[eyed.modelId].name}` : c.intent === 'buy' ? 'Will kaufen' : c.intent === 'sell' ? 'Verkauft Auto' : c.service?.accepted ? `Abholung ${formatTime(c.service.due)}` : 'Werkstatt-Auftrag';
       ui.setBubble(`c${id}`, text, sp.x, sp.y);
     }
     this.renderHud();

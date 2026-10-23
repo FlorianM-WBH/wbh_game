@@ -19,6 +19,8 @@ export interface Car {
   loc: CarLocation;
   /** set for a service customer's own car (never sold, never on the lot) */
   ownerId?: number;
+  /** asking price on the windscreen (lot cars only); buyers may pay it without haggling */
+  price?: number | null;
 }
 
 export type Intent = 'buy' | 'sell' | 'service';
@@ -44,6 +46,11 @@ export interface Customer {
   wish?: string | null;
   /** service customers only: the job they want done on their own car */
   service?: ServiceOrder;
+  /** buyers browsing price tags: the lot car they are looking at, and when they decide */
+  eyeing?: number | null;
+  browseIn?: number;
+  /** cars whose price tag this buyer already found too expensive */
+  rejected?: number[];
 }
 
 export interface ServiceOrder {
@@ -79,7 +86,10 @@ export type SimEvent =
   | { type: 'carAdded'; carId: number }
   | { type: 'carRemoved'; carId: number }
   | { type: 'carMoved'; carId: number }
-  | { type: 'dayEnded'; day: number; ledger: Ledger; rent: number }
+  | { type: 'customerMoved'; customerId: number }
+  | { type: 'customerSays'; customerId: number; text: string }
+  | { type: 'gameOver'; debt: number }
+  | { type: 'dayEnded'; day: number; ledger: Ledger; rent: number; interest: number; bailout: number }
   | { type: 'toast'; text: string };
 
 export interface Stats {
@@ -91,6 +101,13 @@ export interface Stats {
   repairsDone: number;
   upgradesDone: number;
   servicesDone?: number;
+  tagSales?: number;
+  auctionBuys?: number;
+}
+
+export interface AuctionLot {
+  car: Car;
+  price: number;
 }
 
 export interface GameState {
@@ -112,6 +129,14 @@ export interface GameState {
   events: SimEvent[];
   /** bitmask of finished first-steps tips (see src/tutorial.ts); optional for old saves */
   tips?: number;
+  /** reputation 0..100 (50 = unknown); optional for old saves */
+  rep?: number;
+  /** money owed to the loan shark */
+  debt?: number;
+  /** set when the loan shark loses patience */
+  over?: boolean;
+  /** today's dealer auction (computer, needs the 'auktion' tech) */
+  auction?: { day: number; lots: AuctionLot[] };
 }
 
 export function nextId(s: GameState): number {

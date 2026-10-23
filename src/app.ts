@@ -15,6 +15,10 @@ import { deserialize, endDay, newGame, serialize, tick } from './sim/game';
 import { pitchReaction, startPurchase, startSale } from './sim/negotiation';
 import { acceptService, completeService, declineService, haggleService, offerLine, ownerOf, proposedDue, serviceFinished, serviceJobLabel } from './sim/service';
 import { buyBuilding, buyTech, completion, nextBuildingCost, techState } from './sim/progression';
+import { AUCTION_FEE, auctionBlurb, auctionLots, buyAuctionLot, setPriceTag, TAG_STEPS, tagFor } from './sim/market';
+import { borrow, CREDIT_LIMIT, DAILY_INTEREST, debt, GAME_OVER_DEBT, repay, WARN_DEBT } from './sim/finance';
+import { repLabel, repStars, reputation } from './sim/reputation';
+import { GAME_OVER_TEXT, SHARK_GREET, SHARK_NAME, SHARK_WARN } from './content/market';
 import { buildingLevel, carById, customerById, drainEvents, formatMoney, formatTime, hasTech, type Car, type Customer, type GameState, type SimEvent } from './sim/state';
 import { availableUpgrades, liftCar, putOnLift, startRepair, startUpgrade, takeOffLift, type ActionResult } from './sim/workshop';
 import { conditionHtml, openNegotiation } from './ui/negotiationPanel';
@@ -172,6 +176,8 @@ export class App {
       }
     }
     this.scene?.onEvents(events);
+    const over = events.find((e) => e.type === 'gameOver');
+    if (over && over.type === 'gameOver') return this.gameOver(over.debt);
     const day = events.find((e) => e.type === 'dayEnded');
     if (day && day.type === 'dayEnded') this.daySummary(day);
     if (!this.wonShown && completion(this.state) >= 1) {
@@ -204,7 +210,7 @@ export class App {
     }
     if (t.kind === 'car') {
       const car = carById(s, t.carId);
-      return car ? `${MODEL_BY_ID[car.modelId].name} ansehen` : '';
+      return car ? `${MODEL_BY_ID[car.modelId].name} ansehen${car.loc.kind === 'lot' && car.price != null ? ` · Schild ${formatMoney(car.price)}` : ''}` : '';
     }
     const c = customerById(s, t.customerId);
     return c ? `Sprechen mit ${c.name}` : '';
@@ -238,9 +244,16 @@ export class App {
         `<tr><td>Gesamtgewinn aus Verkäufen</td><td>${formatMoney(s.stats.profit)}</td></tr>` +
         `<tr><td>Bester Deal</td><td>${formatMoney(s.stats.bestDeal)}</td></tr>` +
         `<tr><td>Erledigte Werkstatt-Aufträge</td><td>${s.stats.servicesDone ?? 0}</td></tr>` +
+        `<tr><td>Ruf</td><td>${'★'.repeat(repStars(s))}${'☆'.repeat(5 - repStars(s))} ${esc(repLabel(s))} (${Math.round(reputation(s))})</td></tr>` +
+        (debt(s) > 0 ? `<tr><td>Schulden bei Tony</td><td class="bad">${formatMoney(debt(s))}</td></tr>` : '') +
         `</table>`,
       options: [
         { label: 'Firma ausbauen', desc: 'Parkplatz, Showroom, Werkstatt, Deko…', action: () => this.buildingMenu() },
+        {
+          label: 'Kredithai anrufen',
+          desc: debt(s) > 0 ? `Du schuldest ${SHARK_NAME} ${formatMoney(debt(s))}.` : `${SHARK_NAME} leiht dir Geld. Zu Zinsen, die man in Florida nicht laut sagt.`,
+          action: () => this.sharkMenu(),
+        },
         { label: 'Spiel speichern', action: () => (this.save(), this.ui.toast('Gespeichert.'), this.ui.close()) },
         {
           label: 'Feierabend machen',
@@ -277,14 +290,116 @@ export class App {
     this.ui.menu({ title: 'Firma ausbauen', sub: `Kontostand: ${formatMoney(s.money)}`, options });
   }
 
+  sharkMenu(): void {
+    const s = this.state;
+    const d = debt(s);
+    const options: MenuOption[] = [];
+    const again = (r: ActionResult) => {
+      if (this.result(r, 'cash')) {
+        this.flush();
+        this.sharkMenu();
+      }
+    };
+    for (const amt of [2000, 5000, 10000]) {
+      options.push({
+        label: `${formatMoney(amt)} leihen`,
+        desc: `${Math.round(DAILY_INTEREST * 100)}% Zinsen pro Tag, jeden Abend fällig.`,
+        disabled: d + amt > CREDIT_LIMIT,
+        action: () => again(borrow(s, amt)),
+      });
+    }
+    for (const amt of [2000, 10000]) {
+      if (d > amt) options.push({ label: `${formatMoney(amt)} zurückzahlen`, disabled: s.money < amt, action: () => again(repay(s, amt)) });
+    }
+    if (d > 0) options.push({ label: 'Alles zurückzahlen', right: formatMoney(d), disabled: s.money < d, action: () => again(repay(s, d)) });
+    const line = d > WARN_DEBT ? SHARK_WARN[s.day % SHARK_WARN.length] : SHARK_GREET[s.day % SHARK_GREET.length];
+    this.ui.menu({
+      title: SHARK_NAME,
+      sub: `Schulden: ${formatMoney(d)} · Kontostand: ${formatMoney(s.money)}`,
+      body:
+        `<p>„${esc(line)}“</p>` +
+        `<p class="sub">Leihen bis ${formatMoney(CREDIT_LIMIT)}. Bist du abends im Minus, springt Tony automatisch ein – mit 20% Aufschlag. ` +
+        `Über ${formatMoney(GAME_OVER_DEBT)} Schulden ist das Spiel vorbei.</p>`,
+      options,
+    });
+  }
+
+  priceTagMenu(carId: number): void {
+    const s = this.state;
+    const car = carById(s, carId);
+    if (!car) return;
+    const options: MenuOption[] = TAG_STEPS.map((f) => {
+      const p = tagFor(car, f);
+      return {
+        label: `${formatMoney(p)} (${f === 1 ? 'Marktwert' : `Marktwert ${f > 1 ? '+' : '−'}${Math.round(Math.abs(f - 1) * 100)}%`})`,
+        desc: `Gewinn bei Verkauf: ${formatMoney(p - car.invested)}`,
+        right: car.price === p ? '✔' : undefined,
+        action: () => {
+          if (this.result(setPriceTag(s, car.id, p))) this.carMenu(car.id);
+        },
+      };
+    });
+    if (car.price != null)
+      options.push({
+        label: 'Preisschild abnehmen',
+        action: () => {
+          if (this.result(setPriceTag(s, car.id, null))) this.carMenu(car.id);
+        },
+      });
+    this.ui.menu({
+      title: 'Preisschild',
+      sub: `${MODEL_BY_ID[car.modelId].name} · Marktwert ${formatMoney(marketValue(car))} · investiert ${formatMoney(car.invested)}`,
+      body:
+        '<p>Wartende Käufer schauen sich ausgezeichnete Autos selbst an. Passt der Preis, zahlen sie ihn ohne Feilschen. Zu teuer? Dann gehen sie weiter – ansprechen kannst du sie trotzdem.</p>' +
+        '<p class="sub">Ohne Feilschen zahlen Käufer meist weniger als am Verhandlungstisch – außer das Auto erfüllt ihren Wunsch.</p>',
+      options,
+    });
+  }
+
+  auctionMenu(): void {
+    const s = this.state;
+    const lots = auctionLots(s);
+    const full = freeSlot(s) === null;
+    const exact = hasTech(s, 'gutachter');
+    const tags = (c: Car) => c.upgrades.map((u) => ` <span class="tag">${esc(UPGRADE_BY_ID[u].name)}</span>`).join('');
+    this.ui.menu({
+      title: 'BTX-Händlerauktion',
+      sub: `Heute im Angebot · Gebühr ${formatMoney(AUCTION_FEE)} pro Wagen · Kontostand: ${formatMoney(s.money)}`,
+      body:
+        (lots.length ? '' : '<p>Alles weg für heute. Morgen gibt es neue Wagen.</p>') +
+        lots
+          .map(
+            (l) =>
+              `<p><b>${esc(MODEL_BY_ID[l.car.modelId].name)}</b> <span class="tag">${CLASS_LABEL[MODEL_BY_ID[l.car.modelId].cls]}</span>${tags(l.car)}` +
+              ` – <i>${esc(auctionBlurb(l))}</i><br>${conditionHtml(s, l.car, exact)}</p>`,
+          )
+          .join('') +
+        (exact ? '' : '<p class="sub">Ohne Gutachter-Lehrgang siehst du den Zustand nur grob.</p>'),
+      options: lots.map((l) => ({
+        label: `Ersteigern: ${MODEL_BY_ID[l.car.modelId].name}`,
+        desc: full ? 'Kein freier Stellplatz!' : exact ? `Marktwert ${formatMoney(marketValue(l.car))}` : 'Marktwert unbekannt',
+        right: formatMoney(l.price + AUCTION_FEE),
+        disabled: full || l.price + AUCTION_FEE > s.money,
+        action: () => {
+          if (this.result(buyAuctionLot(s, l.car.id), 'cash')) {
+            this.flush();
+            this.auctionMenu();
+          }
+        },
+      })),
+    });
+  }
+
   // ---------- computer ----------
 
   techMenu(): void {
     const s = this.state;
     const branchLabel = { werkstatt: 'Werkstatt', tuning: 'Tuning', verkauf: 'Verkauf', marketing: 'Marketing' };
-    const options: MenuOption[] = TECHS.map((t) => {
+    const options: MenuOption[] = [];
+    if (hasTech(s, 'auktion')) options.push({ label: '>> Händlerauktion öffnen', desc: 'Heute zu ersteigernde Wagen ansehen.', action: () => this.auctionMenu() });
+    for (const t of TECHS) {
       const st = techState(s, t.id);
-      return {
+      options.push({
         label: `[${branchLabel[t.branch]}] ${t.name}`,
         desc: t.desc + (st === 'locked' ? ` (Benötigt: ${t.requires.map((r) => TECHS.find((x) => x.id === r)!.name).join(', ')})` : ''),
         right: st === 'owned' ? '✔' : formatMoney(t.cost),
@@ -295,8 +410,8 @@ export class App {
             this.techMenu();
           }
         },
-      };
-    });
+      });
+    }
     this.ui.menu({
       title: 'Commodore-Computer 64K',
       sub: `READY. Kontostand: ${formatMoney(s.money)} · ${s.techs.length}/${TECHS.length} freigeschaltet`,
@@ -471,6 +586,11 @@ export class App {
           }
         },
       });
+      options.push({
+        label: car.price != null ? `Preisschild ändern (${formatMoney(car.price)})` : 'Preisschild anbringen',
+        desc: 'Käufer können zum Schildpreis kaufen, ohne zu feilschen.',
+        action: () => this.priceTagMenu(car.id),
+      });
     }
     const owner = ownerOf(s, car);
     if (owner?.service) {
@@ -505,7 +625,7 @@ export class App {
       body:
         `<p>${conditionHtml(s, car, onLot || hasTech(s, 'gutachter'))}</p>` +
         (onLot
-          ? `<p>Marktwert: <b>${formatMoney(marketValue(car))}</b> · investiert: <b>${formatMoney(car.invested)}</b></p>`
+          ? `<p>Marktwert: <b>${formatMoney(marketValue(car))}</b> · investiert: <b>${formatMoney(car.invested)}</b>${car.price != null ? ` · Preisschild: <b>${formatMoney(car.price)}</b>` : ''}</p>`
           : `<p>Gehört ${esc(seller?.name ?? 'einem Verkäufer')}. Sprich ihn oder sie an, um zu verhandeln.</p>`) +
         (car.upgrades.length ? `<p>Extras: ${car.upgrades.map((u) => `<span class="tag">${esc(UPGRADE_BY_ID[u].name)}</span>`).join('')}</p>` : ''),
       options,
@@ -557,7 +677,7 @@ export class App {
     const wish = c.wish ? UPGRADE_BY_ID[c.wish] : null;
     const options: MenuOption[] = cars.map((car) => ({
       label: `Zeigen: ${MODEL_BY_ID[car.modelId].name}${wish && car.upgrades.includes(wish.id) ? ' ★' : ''}`,
-      desc: `Wert ${formatMoney(marketValue(car))} · investiert ${formatMoney(car.invested)}`,
+      desc: `Wert ${formatMoney(marketValue(car))} · investiert ${formatMoney(car.invested)}${car.price != null ? ` · Schild ${formatMoney(car.price)}` : ''}`,
       action: () => {
         const r = pitchReaction(s, c.id, car.id);
         if (r.fit === 'bad') {
@@ -697,6 +817,8 @@ export class App {
       `<span class="money ${s.money < 0 ? 'neg' : ''}">${formatMoney(s.money)}</span>` +
       `<span>Tag ${s.day}</span><span class="clock">${formatTime(s.minute)}</span>` +
       `<span>Autos ${lotCars(s).length}/${lotCapacity(s)}</span>` +
+      `<span class="rep" title="Ruf: ${esc(repLabel(s))}">${'★'.repeat(repStars(s))}<i>${'★'.repeat(5 - repStars(s))}</i></span>` +
+      (debt(s) > 0 ? `<span class="debt ${debt(s) > WARN_DEBT ? 'neg' : ''}">Schulden ${formatMoney(debt(s))}</span>` : '') +
       `<span class="spacer"></span>${jobHtml}<span>Imperium ${Math.round(completion(s) * 100)}%</span>`;
     if (html !== this.hudHtml) this.ui.hud.innerHTML = this.hudHtml = html;
   }
@@ -717,11 +839,37 @@ export class App {
         `<tr><td>Ergebnis</td><td class="${net >= 0 ? 'good' : 'bad'}">${formatMoney(net)}</td></tr>` +
         `<tr><td>Verkauft / angekauft</td><td>${l.sold} / ${l.bought}</td></tr>` +
         `<tr><td>Kontostand</td><td>${formatMoney(this.state.money)}</td></tr>` +
+        (e.interest > 0 ? `<tr><td>Zinsen an Tony</td><td class="bad">${formatMoney(e.interest)}</td></tr>` : '') +
+        (debt(this.state) > 0 ? `<tr><td>Schulden</td><td class="bad">${formatMoney(debt(this.state))}</td></tr>` : '') +
+        `<tr><td>Ruf</td><td>${esc(repLabel(this.state))}</td></tr>` +
         `</table>` +
-        (this.state.money < 0 ? '<p class="bad">Du bist im Minus! Der Kredithai lässt grüßen. Verkauf schnell ein paar Autos.</p>' : '') +
+        (e.bailout > 0 ? `<p class="bad">Du warst im Minus! ${SHARK_NAME} hat ${formatMoney(e.bailout)} vorgestreckt (inkl. 20% „Bearbeitungsgebühr“).</p>` : '') +
+        (debt(this.state) > WARN_DEBT ? `<p class="bad">„${esc(SHARK_WARN[e.day % SHARK_WARN.length])}“ Ab ${formatMoney(GAME_OVER_DEBT)} Schulden ist Schluss!</p>` : '') +
         '<p class="sub">Automatisch gespeichert.</p>',
       options: [],
       closeLabel: `Tag ${this.state.day} beginnen`,
+    });
+  }
+
+  gameOver(finalDebt: number): void {
+    const s = this.state;
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch {
+      /* storage may be unavailable */
+    }
+    sfx('walkout');
+    this.ui.menu({
+      title: 'GAME OVER',
+      sub: `Tag ${s.day} · Schulden: ${formatMoney(finalDebt)}`,
+      body:
+        `<p>${esc(GAME_OVER_TEXT)}</p>` +
+        `<p>Verkaufte Autos: <b>${s.stats.carsSold}</b> · Gesamtgewinn: <b>${formatMoney(s.stats.profit)}</b> · Imperium: <b>${Math.round(completion(s) * 100)}%</b></p>`,
+      options: [],
+      closeLabel: 'Neues Spiel',
+      onClose: () => {
+        if (this.state.over) this.startNew();
+      },
     });
   }
 

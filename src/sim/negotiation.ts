@@ -7,7 +7,8 @@ import { REACTIONS, type ReactionKey } from '../content/reactions';
 import { archetypeOf, buyerLimit, carFit, removeCustomer, sellerLimit, wishMet } from './customers';
 import { freeSlot, overallCondition } from './economy';
 import { chance, pick, randRange } from './rng';
-import { buildingLevel, carById, customerById, emit, formatMoney, hasTech, type GameState } from './state';
+import { addRep, repMoodBonus } from './reputation';
+import { buildingLevel, carById, customerById, emit, formatMoney, hasTech, type Car, type GameState } from './state';
 
 export type Tactic = 'charm' | 'hard' | 'story';
 
@@ -66,8 +67,24 @@ export function effectiveLimit(n: Negotiation): number {
   return n.kind === 'sale' ? n.limit * (1 + 0.08 * m) : n.limit * (1 - 0.08 * m);
 }
 
-function baseMood(s: GameState): number {
-  return 50 + (buildingLevel(s, 'deko') > 0 ? 10 : 0);
+export function baseMood(s: GameState): number {
+  return 50 + (buildingLevel(s, 'deko') > 0 ? 10 : 0) + repMoodBonus(s);
+}
+
+/** Book the sale of a lot car: money, stats, reputation; the car drives off. */
+export function recordSale(s: GameState, car: Car, price: number): number {
+  const profit = price - car.invested;
+  s.money += price;
+  s.ledger.income += price;
+  s.ledger.sold++;
+  s.stats.carsSold++;
+  s.stats.revenue += price;
+  s.stats.profit += profit;
+  s.stats.bestDeal = Math.max(s.stats.bestDeal, profit);
+  s.cars = s.cars.filter((x) => x.id !== car.id);
+  addRep(s, 1);
+  emit(s, { type: 'carRemoved', carId: car.id });
+  return profit;
 }
 
 function basePatience(s: GameState, archetypePatience: number): number {
@@ -162,16 +179,7 @@ function finish(s: GameState, n: Negotiation, result: 'deal' | 'walkout', price:
   const car = carById(s, n.carId)!;
   if (result === 'deal' && price != null) {
     if (n.kind === 'sale') {
-      const profit = price - car.invested;
-      s.money += price;
-      s.ledger.income += price;
-      s.ledger.sold++;
-      s.stats.carsSold++;
-      s.stats.revenue += price;
-      s.stats.profit += profit;
-      s.stats.bestDeal = Math.max(s.stats.bestDeal, profit);
-      s.cars = s.cars.filter((x) => x.id !== car.id);
-      emit(s, { type: 'carRemoved', carId: car.id });
+      const profit = recordSale(s, car, price);
       emit(s, { type: 'toast', text: `Verkauft für ${formatMoney(price)} (Gewinn ${formatMoney(profit)})` });
     } else {
       const slot = freeSlot(s);
@@ -180,12 +188,14 @@ function finish(s: GameState, n: Negotiation, result: 'deal' | 'walkout', price:
       s.ledger.bought++;
       s.stats.carsBought++;
       car.invested = price;
+      addRep(s, 0.5);
       car.loc = { kind: 'lot', slot: slot ?? 0 };
       c.carId = null;
       emit(s, { type: 'carMoved', carId: car.id });
       emit(s, { type: 'toast', text: `Angekauft für ${formatMoney(price)}` });
     }
   }
+  if (result === 'walkout') addRep(s, -1.5);
   removeCustomer(s, c.id, 'done');
 }
 

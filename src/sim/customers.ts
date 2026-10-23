@@ -4,6 +4,7 @@ import { MODELS, type CarModel } from '../content/models';
 import { COMPONENTS, UPGRADES, type Component } from '../content/workshop';
 import { carTags, freeSlot, lotCars, marketValue, showroomBonus } from './economy';
 import { makeServiceOrder, SERVICE_LAST_MINUTE } from './service';
+import { addRep } from './reputation';
 import { chance, pick, pickWeighted, rand, randInt, randRange } from './rng';
 import { buildingLevel, emit, hasTech, nextId, type Car, type Customer, type GameState, type Intent } from './state';
 
@@ -122,6 +123,12 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
   const c = s.customers.find((x) => x.id === id);
   if (!c) return;
   s.customers = s.customers.filter((x) => x.id !== id);
+  if (reason === 'impatient') {
+    if (c.service?.accepted) {
+      addRep(s, -6);
+      emit(s, { type: 'toast', text: `${c.name} ist ohne fertiges Auto abgerauscht. Das spricht sich rum!` });
+    } else if (!c.served && !c.rejected?.length) addRep(s, -0.25);
+  }
   // a seller who leaves without a deal drives their car away; a service customer always takes their car
   if (c.carId != null) {
     const car = s.cars.find((x) => x.id === c.carId);

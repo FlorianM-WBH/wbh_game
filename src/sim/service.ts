@@ -7,6 +7,7 @@ import { archetypeOf, removeCustomer } from './customers';
 import { chance, pick, randRange } from './rng';
 import { carById, customerById, DAY_END, emit, formatMoney, formatTime, hasTech, type Car, type Customer, type GameState, type ServiceOrder } from './state';
 import type { ActionResult } from './workshop';
+import { addRep } from './reputation';
 
 /** No new service customers this close to closing time. */
 export const SERVICE_LAST_MINUTE = DAY_END - 240;
@@ -94,6 +95,7 @@ export function haggleService(s: GameState, customerId: number): { line: string;
   }
   if (chance(s, 0.35)) {
     const line = pick(s, SERVICE_HAGGLE_LEAVE);
+    addRep(s, -1);
     removeCustomer(s, c.id, 'done');
     return { line, left: true };
   }
@@ -126,6 +128,7 @@ export function completeService(s: GameState): ActionResult & { text?: string } 
   s.money += pay;
   s.ledger.income += pay;
   s.stats.servicesDone = (s.stats.servicesDone ?? 0) + 1;
+  addRep(s, tip ? 4 : 3);
   const text = pick(s, SERVICE_DONE);
   emit(s, { type: 'toast', text: `Auftrag erledigt: +${formatMoney(c.service.fee)}${tip ? ` und ${formatMoney(tip)} Trinkgeld` : ''}` });
   removeCustomer(s, c.id, 'done');

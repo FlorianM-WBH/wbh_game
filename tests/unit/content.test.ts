@@ -84,6 +84,8 @@ describe('first-steps tips', () => {
     expect(currentTip(s)!.index).toBe(4);
     s.techs.push('x');
     s.buildings.parkplatz = 1;
+    expect(currentTip(s)!.index).toBe(6);
+    s.cars[0].price = 1000;
     expect(currentTip(s)).toBeNull();
     expect(s.tips).toBe((1 << TIPS.length) - 1);
   });

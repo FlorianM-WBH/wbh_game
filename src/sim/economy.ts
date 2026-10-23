@@ -1,6 +1,7 @@
 // Values, costs and the modifiers that tech and buildings apply to them.
 import { MODEL_BY_ID } from '../content/models';
 import { COMPONENTS, COMPONENT_WEIGHT, REPAIR, UPGRADE_BY_ID, type Component, type Tag } from '../content/workshop';
+import { repRateFactor } from './reputation';
 import { buildingLevel, hasTech, type Car, type GameState } from './state';
 
 export const LOT_CAPACITY = [4, 6, 8, 10];
@@ -81,7 +82,7 @@ export function customerRate(s: GameState): number {
   if (hasTech(s, 'radio')) r += 0.3;
   if (hasTech(s, 'tvspot')) r += 0.4;
   if (buildingLevel(s, 'neonschild') > 0) r += 0.25;
-  return r;
+  return r * repRateFactor(s);
 }
 
 /** Multiplier on what buyers are willing to pay. */
