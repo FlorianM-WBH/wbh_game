@@ -141,7 +141,7 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
       emit(s, { type: 'carRemoved', carId: car.id });
     }
   }
-  emit(s, { type: 'customerLeft', customerId: id, name: c.name, reason, withCar });
+  emit(s, { type: 'customerLeft', customerId: id, name: c.name, reason, withCar, missedJob: reason === 'impatient' && !!c.service?.accepted });
 }
 
 export type Fit = 'good' | 'meh' | 'bad';

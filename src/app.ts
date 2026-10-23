@@ -276,7 +276,7 @@ export class App {
         if (e.type === 'toast') this.ui.toast(e.text);
         if (e.type === 'customerArrived') sfx('arrive');
         if (e.type === 'jobDone') sfx('job');
-        if (e.type === 'customerLeft' && e.reason === 'impatient') gone.push(e.name);
+        if (e.type === 'customerLeft' && e.reason === 'impatient' && !e.missedJob) gone.push(e.name);
       }
       if (gone.length === 1) this.ui.toast(`${gone[0]} hatte keine Lust mehr zu warten und ist gegangen.`);
       else if (gone.length > 1) this.ui.toast(`${gone.length} Kunden hatten keine Lust mehr zu warten und sind gegangen.`);
