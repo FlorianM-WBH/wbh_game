@@ -17,9 +17,11 @@ export interface Car {
   /** total money the dealer put into this car (purchase + parts) */
   invested: number;
   loc: CarLocation;
+  /** set for a service customer's own car (never sold, never on the lot) */
+  ownerId?: number;
 }
 
-export type Intent = 'buy' | 'sell';
+export type Intent = 'buy' | 'sell' | 'service';
 
 export interface Customer {
   id: number;
@@ -40,6 +42,20 @@ export interface Customer {
   served: boolean;
   /** buyers only: an upgrade id they hope the car has (optional for old saves) */
   wish?: string | null;
+  /** service customers only: the job they want done on their own car */
+  service?: ServiceOrder;
+}
+
+export interface ServiceOrder {
+  kind: 'repair' | 'upgrade';
+  target: string; // component or upgrade id
+  fee: number;
+  accepted: boolean;
+  haggled: boolean;
+  /** the game minute by which the car must be done (set on acceptance) */
+  due: number;
+  /** text of the request, picked once so it stays stable */
+  ask: string;
 }
 
 export interface Job {
@@ -74,6 +90,7 @@ export interface Stats {
   bestDeal: number;
   repairsDone: number;
   upgradesDone: number;
+  servicesDone?: number;
 }
 
 export interface GameState {

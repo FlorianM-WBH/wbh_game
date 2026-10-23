@@ -13,8 +13,9 @@ import { archetypeOf } from './sim/customers';
 import { dailyRent, freeSlot, lotCapacity, lotCars, marketValue, repairQuote, upgradeQuote } from './sim/economy';
 import { deserialize, endDay, newGame, serialize, tick } from './sim/game';
 import { pitchReaction, startPurchase, startSale } from './sim/negotiation';
+import { acceptService, completeService, declineService, haggleService, offerLine, ownerOf, proposedDue, serviceFinished, serviceJobLabel } from './sim/service';
 import { buyBuilding, buyTech, completion, nextBuildingCost, techState } from './sim/progression';
-import { buildingLevel, carById, customerById, drainEvents, formatMoney, formatTime, hasTech, type GameState, type SimEvent } from './sim/state';
+import { buildingLevel, carById, customerById, drainEvents, formatMoney, formatTime, hasTech, type Car, type Customer, type GameState, type SimEvent } from './sim/state';
 import { availableUpgrades, liftCar, putOnLift, startRepair, startUpgrade, takeOffLift, type ActionResult } from './sim/workshop';
 import { conditionHtml, openNegotiation } from './ui/negotiationPanel';
 import { esc, h, UI, type MenuOption } from './ui/ui';
@@ -141,7 +142,7 @@ export class App {
       title: 'Willkommen in Miami, 1986!',
       body:
         '<p>Onkel Sal hat dir seinen Gebrauchtwagenhandel vermacht. Und seine Schulden. Und seinen Kaktus.</p>' +
-        '<p><b>Kaufe</b> Autos von Verkäufern an der <span class="tag">ANKAUF</span>-Zone, <b>repariere und tune</b> sie an der Hebebühne und <b>verkaufe</b> sie teuer an Kunden auf dem Hof.</p>' +
+        '<p><b>Kaufe</b> Autos von Verkäufern an der <span class="tag">ANKAUF</span>-Zone, <b>repariere und tune</b> sie an der Hebebühne und <b>verkaufe</b> sie teuer an Kunden auf dem Hof. <b>Werkstatt-Kunden</b> zahlen dir außerdem gutes Geld für Reparaturen an ihren eigenen Autos – wenn du pünktlich fertig wirst.</p>' +
         '<p>Im <b>Büro</b> baust du die Firma aus, am <b>Computer</b> schaltest du neue Technik frei. Ziel: das größte Autoimperium von Florida.</p>' +
         `<p>Jeden Abend um 20:00 werden <b>${formatMoney(dailyRent(this.state))}</b> Miete fällig. Onkel Sals Kredithai hat keinen Humor.</p>`,
       options: [],
@@ -236,6 +237,7 @@ export class App {
         `<tr><td>Verkaufte Autos (gesamt)</td><td>${s.stats.carsSold}</td></tr>` +
         `<tr><td>Gesamtgewinn aus Verkäufen</td><td>${formatMoney(s.stats.profit)}</td></tr>` +
         `<tr><td>Bester Deal</td><td>${formatMoney(s.stats.bestDeal)}</td></tr>` +
+        `<tr><td>Erledigte Werkstatt-Aufträge</td><td>${s.stats.servicesDone ?? 0}</td></tr>` +
         `</table>`,
       options: [
         { label: 'Firma ausbauen', desc: 'Parkplatz, Showroom, Werkstatt, Deko…', action: () => this.buildingMenu() },
@@ -308,13 +310,17 @@ export class App {
     const s = this.state;
     const car = liftCar(s);
     if (!car) {
-      const cars = lotCars(s);
+      const order = s.customers.find((c) => c.service?.accepted && carById(s, c.carId)?.loc.kind === 'buyin');
+      const cars = order ? [carById(s, order.carId)!, ...lotCars(s)] : lotCars(s);
       this.ui.menu({
         title: 'Hebebühne',
         sub: 'Die Hebebühne ist leer. Welchen Wagen holen wir rein?',
         options: cars.map((c) => ({
-          label: MODEL_BY_ID[c.modelId].name,
-          desc: `Zustand: ${Math.round(COMPONENTS.reduce((a, k) => a + c.cond[k], 0) / 4)}% · Wert ${formatMoney(marketValue(c))}`,
+          label: c.ownerId != null ? `Kundenauftrag: ${MODEL_BY_ID[c.modelId].name}` : MODEL_BY_ID[c.modelId].name,
+          desc:
+            c.ownerId != null && order?.service
+              ? `${serviceJobLabel(order.service)} · Abholung ${formatTime(order.service.due)} · ${formatMoney(order.service.fee)}`
+              : `Zustand: ${Math.round(COMPONENTS.reduce((a, k) => a + c.cond[k], 0) / 4)}% · Wert ${formatMoney(marketValue(c))}`,
           action: () => {
             if (this.result(putOnLift(s, c.id))) {
               this.flush();
@@ -325,6 +331,8 @@ export class App {
       });
       return;
     }
+    const owner = ownerOf(s, car);
+    if (owner?.service) return this.serviceLiftMenu(car, owner);
     const model = MODEL_BY_ID[car.modelId];
     const job = s.lift.job;
     const head =
@@ -386,6 +394,64 @@ export class App {
     });
   }
 
+  /** The lift with a customer's car: only the ordered job, then hand it back. */
+  serviceLiftMenu(car: Car, owner: Customer): void {
+    const s = this.state;
+    const o = owner.service!;
+    const job = s.lift.job;
+    const done = serviceFinished(car, o);
+    const head =
+      `<p>Kundenauftrag von <b>${esc(owner.name)}</b>: <b>${esc(MODEL_BY_ID[car.modelId].name)}</b></p>` +
+      `<p>Auftrag: <b>${esc(serviceJobLabel(o))}</b> · Lohn: <b>${formatMoney(o.fee)}</b> · Abholung um <b>${formatTime(o.due)}</b> (jetzt ${formatTime(s.minute)})</p>`;
+    if (job) {
+      const pct = Math.round(100 - (job.minutesLeft / job.total) * 100);
+      this.ui.menu({
+        title: 'Hebebühne',
+        body: head + `<p>In Arbeit: ${pct}% (noch ca. ${Math.ceil(job.minutesLeft)} Min.)</p><p>Tipp: <span class="key">E</span> an der Hebebühne gedrückt halten, um mit anzupacken (3× schneller).</p>`,
+        options: [],
+      });
+      return;
+    }
+    const options: MenuOption[] = [];
+    if (done) {
+      options.push({
+        label: 'Fertig! Wagen übergeben und kassieren',
+        desc: 'Früh fertig = Trinkgeld.',
+        right: formatMoney(o.fee),
+        action: () => {
+          const r = completeService(s);
+          if (this.result(r, 'cash')) {
+            this.flush();
+            this.ui.menu({ title: owner.name, body: `<p>„${esc(r.text ?? '')}“</p>`, options: [] });
+          }
+        },
+      });
+    } else {
+      const q = o.kind === 'repair' ? repairQuote(s, car, o.target as keyof typeof COMPONENT_LABEL) : upgradeQuote(s, o.target);
+      options.push({
+        label: serviceJobLabel(o),
+        desc: `${q.minutes} Minuten Arbeit · Teile zahlst du, der Kunde zahlt ${formatMoney(o.fee)}`,
+        right: formatMoney(q.cost),
+        disabled: q.cost > s.money,
+        action: () => {
+          const r = o.kind === 'repair' ? startRepair(s, o.target as keyof typeof COMPONENT_LABEL) : startUpgrade(s, o.target);
+          if (this.result(r)) this.ui.close();
+        },
+      });
+      options.push({
+        label: 'Zurück in die Ankauf-Zone stellen',
+        desc: 'Macht die Hebebühne frei. Der Auftrag bleibt offen.',
+        action: () => {
+          if (this.result(takeOffLift(s))) {
+            this.flush();
+            this.ui.close();
+          }
+        },
+      });
+    }
+    this.ui.menu({ title: 'Hebebühne – Kundenauftrag', body: head, options });
+  }
+
   carMenu(carId: number): void {
     const s = this.state;
     const car = carById(s, carId);
@@ -405,6 +471,32 @@ export class App {
           }
         },
       });
+    }
+    const owner = ownerOf(s, car);
+    if (owner?.service) {
+      if (!owner.service.accepted) return this.customerMenu(owner.id);
+      this.ui.menu({
+        title: model.name,
+        sub: `Kundenauftrag von ${owner.name}`,
+        body: `<p>Auftrag: <b>${esc(serviceJobLabel(owner.service))}</b> · Abholung um <b>${formatTime(owner.service.due)}</b></p>`,
+        options:
+          car.loc.kind === 'buyin'
+            ? [
+                {
+                  label: 'In die Werkstatt fahren',
+                  disabled: s.lift.carId != null,
+                  desc: s.lift.carId != null ? 'Die Hebebühne ist belegt. Erst den Wagen dort runterholen.' : undefined,
+                  action: () => {
+                    if (this.result(putOnLift(s, car.id))) {
+                      this.flush();
+                      this.ui.close();
+                    }
+                  },
+                },
+              ]
+            : [],
+      });
+      return;
     }
     const seller = s.customers.find((c) => c.carId === car.id);
     this.ui.menu({
@@ -434,6 +526,7 @@ export class App {
     const c = customerById(s, customerId);
     if (!c) return;
     const a = ARCHETYPE_BY_ID[c.archetypeId];
+    if (c.intent === 'service') return this.serviceCustomerMenu(c, extra);
     if (c.intent === 'sell') {
       const car = carById(s, c.carId)!;
       const lotFull = freeSlot(s) === null;
@@ -488,6 +581,71 @@ export class App {
           ? `<p>Menschenkenntnis: steht auf ${a.likes.map((t) => `<span class="tag">${t}</span>`).join('')} · Budget etwa ${formatMoney(c.budget)}</p>`
           : '') +
         (cars.length ? '' : '<p class="bad">Dein Hof ist leer! Kauf erst ein paar Autos an.</p>'),
+      options,
+      closeLabel: 'Später',
+    });
+  }
+
+  serviceCustomerMenu(c: Customer, extra?: string): void {
+    const s = this.state;
+    const o = c.service!;
+    const car = carById(s, c.carId)!;
+    const a = archetypeOf(c);
+    if (o.accepted) {
+      const where = car.loc.kind === 'lift' ? (serviceFinished(car, o) ? 'Fertig auf der Hebebühne.' : 'Steht auf der Hebebühne.') : 'Steht noch in der Ankauf-Zone.';
+      this.ui.menu({
+        title: c.name,
+        sub: a.label,
+        body:
+          `<p>„Und? Ist mein ${esc(MODEL_BY_ID[car.modelId].name)} fertig? Um ${formatTime(o.due)} bin ich weg. Mit oder ohne Auto.“</p>` +
+          `<p>Auftrag: <b>${esc(serviceJobLabel(o))}</b> · ${where}</p>`,
+        options: [],
+        closeLabel: 'Bin dran!',
+      });
+      return;
+    }
+    const options: MenuOption[] = [
+      {
+        label: 'Auftrag annehmen',
+        desc: `${serviceJobLabel(o)} bis ${formatTime(proposedDue(s, c))}. Teile zahlst du.`,
+        right: formatMoney(o.fee),
+        action: () => {
+          if (this.result(acceptService(s, c.id), 'cash')) {
+            this.ui.close();
+            this.ui.toast(`Auftrag angenommen: ${serviceJobLabel(o)} bis ${formatTime(o.due)}.`);
+          }
+        },
+      },
+    ];
+    if (!o.haggled) {
+      options.push({
+        label: 'Mehr verlangen (+25%)',
+        desc: 'Klappt nicht immer. Manche fahren dann lieber zur Konkurrenz.',
+        action: () => {
+          const r = haggleService(s, c.id);
+          this.flush();
+          if (r.left) {
+            sfx('walkout');
+            this.ui.menu({ title: c.name, body: `<p>„${esc(r.line)}“</p>`, options: [] });
+          } else this.serviceCustomerMenu(c, r.line);
+        },
+      });
+    }
+    options.push({
+      label: 'Ablehnen',
+      action: () => {
+        declineService(s, c.id);
+        this.flush();
+        this.ui.close();
+      },
+    });
+    this.ui.menu({
+      title: c.name,
+      sub: `${a.label} · Werkstatt-Kunde`,
+      body:
+        `<p>„${esc(extra ?? o.ask)}“</p>` +
+        `<p>„${esc(offerLine(s, c))}“</p>` +
+        `<p>${conditionHtml(s, car, true)}</p>`,
       options,
       closeLabel: 'Später',
     });

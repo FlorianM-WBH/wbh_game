@@ -3,6 +3,7 @@ import { ARCHETYPES, ARCHETYPE_BY_ID, type Archetype } from '../content/archetyp
 import { MODELS, type CarModel } from '../content/models';
 import { COMPONENTS, UPGRADES, type Component } from '../content/workshop';
 import { carTags, freeSlot, lotCars, marketValue, showroomBonus } from './economy';
+import { makeServiceOrder, SERVICE_LAST_MINUTE } from './service';
 import { chance, pick, pickWeighted, rand, randInt, randRange } from './rng';
 import { buildingLevel, emit, hasTech, nextId, type Car, type Customer, type GameState, type Intent } from './state';
 
@@ -19,7 +20,7 @@ function freeWaitSpot(s: GameState): number | null {
 }
 
 function buyinBusy(s: GameState): boolean {
-  return s.cars.some((c) => c.loc.kind === 'buyin') || s.customers.some((c) => c.intent === 'sell');
+  return s.cars.some((c) => c.loc.kind === 'buyin' || c.ownerId != null) || s.customers.some((c) => c.intent !== 'buy');
 }
 
 /** Random condition record, skewed by a "how well kept" factor 0..1. */
@@ -52,6 +53,7 @@ function modelForArchetype(s: GameState, a: Archetype): CarModel {
 }
 
 function chooseIntent(s: GameState): Intent | null {
+  if (!buyinBusy(s) && s.minute < SERVICE_LAST_MINUTE && chance(s, 0.2)) return 'service';
   const canSell = !buyinBusy(s) && freeSlot(s) !== null;
   const canBuy = freeWaitSpot(s) !== null;
   if (!canSell && !canBuy) return null;
@@ -73,11 +75,11 @@ function chooseWish(s: GameState, a: Archetype): string | null {
 export function spawnCustomer(s: GameState, forceIntent?: Intent): Customer | null {
   const intent = forceIntent ?? chooseIntent(s);
   if (!intent) return null;
-  if (intent === 'sell' && buyinBusy(s)) return null;
+  if (intent !== 'buy' && buyinBusy(s)) return null;
   const spot = intent === 'buy' ? freeWaitSpot(s) : -1;
   if (spot === null) return null;
 
-  const a = pickWeighted(s, ARCHETYPES, (x) => (intent === 'buy' ? x.buyWeight : x.sellWeight));
+  const a = pickWeighted(s, ARCHETYPES, (x) => (intent === 'buy' ? x.buyWeight : intent === 'sell' ? x.sellWeight : x.buyWeight + x.sellWeight));
   const rich = hasTech(s, 'tvspot') ? 1.25 : 1;
   const [bmin, bmax] = a.budget;
   // skew towards the low end of the budget range
@@ -103,6 +105,14 @@ export function spawnCustomer(s: GameState, forceIntent?: Intent): Customer | nu
     c.carId = car.id;
     emit(s, { type: 'carAdded', carId: car.id });
   }
+  if (intent === 'service') {
+    const car = makeCar(s, modelForArchetype(s, a), randRange(s, 0.3, 0.9));
+    car.ownerId = c.id;
+    s.cars.push(car);
+    c.carId = car.id;
+    c.service = makeServiceOrder(s, car, a);
+    emit(s, { type: 'carAdded', carId: car.id });
+  }
   s.customers.push(c);
   emit(s, { type: 'customerArrived', customerId: c.id });
   return c;
@@ -112,11 +122,12 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
   const c = s.customers.find((x) => x.id === id);
   if (!c) return;
   s.customers = s.customers.filter((x) => x.id !== id);
-  // a seller who leaves without a deal drives their car away
+  // a seller who leaves without a deal drives their car away; a service customer always takes their car
   if (c.carId != null) {
     const car = s.cars.find((x) => x.id === c.carId);
-    if (car && car.loc.kind === 'buyin') {
+    if (car && (car.loc.kind === 'buyin' || car.ownerId === c.id)) {
       s.cars = s.cars.filter((x) => x.id !== car.id);
+      if (s.lift.carId === car.id) s.lift = { carId: null, job: null };
       emit(s, { type: 'carRemoved', carId: car.id });
     }
   }

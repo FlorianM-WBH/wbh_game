@@ -15,7 +15,8 @@ export function liftCar(s: GameState) {
 
 export function putOnLift(s: GameState, carId: number): ActionResult {
   const car = carById(s, carId);
-  if (!car || car.loc.kind !== 'lot') return { ok: false, reason: 'Wagen steht nicht auf dem Hof.' };
+  const serviceCar = car?.ownerId != null && !!s.customers.find((c) => c.id === car.ownerId)?.service?.accepted;
+  if (!car || (car.loc.kind !== 'lot' && !serviceCar)) return { ok: false, reason: 'Wagen steht nicht auf dem Hof.' };
   if (s.lift.carId != null) return { ok: false, reason: 'Die Hebebühne ist schon belegt.' };
   car.loc = { kind: 'lift' };
   s.lift.carId = car.id;
@@ -27,6 +28,13 @@ export function takeOffLift(s: GameState): ActionResult {
   const car = liftCar(s);
   if (!car) return { ok: false, reason: 'Die Hebebühne ist leer.' };
   if (s.lift.job) return { ok: false, reason: 'Erst die laufende Arbeit abschließen.' };
+  if (car.ownerId != null) {
+    // a customer's car goes back to the buy-in zone where its owner waits
+    car.loc = { kind: 'buyin' };
+    s.lift.carId = null;
+    emit(s, { type: 'carMoved', carId: car.id });
+    return { ok: true };
+  }
   const slot = freeSlot(s);
   if (slot === null) return { ok: false, reason: 'Kein freier Stellplatz auf dem Hof.' };
   car.loc = { kind: 'lot', slot };

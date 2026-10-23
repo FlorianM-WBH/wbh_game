@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { newGame } from '../../src/sim/game';
+import { newGame, tick } from '../../src/sim/game';
+import { lotCars, repairQuote, upgradeQuote } from '../../src/sim/economy';
+import { acceptService, completeService, serviceFinished } from '../../src/sim/service';
+import { putOnLift, startRepair, startUpgrade, takeOffLift, tickLift } from '../../src/sim/workshop';
 import { spawnCustomer, buyerLimit, wishMet } from '../../src/sim/customers';
 import { pitchReaction, startSale, useTactic } from '../../src/sim/negotiation';
 import { ARCHETYPES } from '../../src/content/archetypes';
@@ -83,5 +86,78 @@ describe('first-steps tips', () => {
     s.buildings.parkplatz = 1;
     expect(currentTip(s)).toBeNull();
     expect(s.tips).toBe((1 << TIPS.length) - 1);
+  });
+});
+
+describe('service customers', () => {
+  function serviceCustomer(seed: number) {
+    const s = newGame(seed);
+    const c = spawnCustomer(s, 'service')!;
+    return { s, c, car: s.cars.find((x) => x.id === c.carId)! };
+  }
+
+  it('arrive with their own car and a job that needs doing', () => {
+    const { s, c, car } = serviceCustomer(21);
+    expect(c.service).toBeTruthy();
+    expect(car.ownerId).toBe(c.id);
+    expect(car.loc.kind).toBe('buyin');
+    expect(serviceFinished(car, c.service!)).toBe(false);
+    expect(c.service!.fee).toBeGreaterThan(0);
+    // the buy-in zone is taken: no seller can come now
+    expect(spawnCustomer(s, 'sell')).toBeNull();
+    // and the car never counts as stock
+    expect(lotCars(s).some((x) => x.id === car.id)).toBe(false);
+  });
+
+  it('full job: accept, lift, work, hand over, get paid', () => {
+    for (let seed = 30; seed < 40; seed++) {
+      const { s, c, car } = serviceCustomer(seed);
+      expect(putOnLift(s, car.id).ok).toBe(false); // not accepted yet
+      expect(acceptService(s, c.id).ok).toBe(true);
+      expect(c.service!.due).toBeGreaterThan(s.minute);
+      expect(putOnLift(s, car.id).ok).toBe(true);
+      const o = c.service!;
+      const r = o.kind === 'repair' ? startRepair(s, o.target as never) : startUpgrade(s, o.target);
+      expect(r.ok).toBe(true);
+      const money = s.money;
+      expect(completeService(s).ok).toBe(false); // job still running
+      tickLift(s, 1000);
+      const done = completeService(s);
+      expect(done.ok).toBe(true);
+      expect(s.money).toBeGreaterThanOrEqual(money + o.fee);
+      expect(s.cars.some((x) => x.id === car.id)).toBe(false);
+      expect(s.lift.carId).toBeNull();
+      expect(s.customers.some((x) => x.id === c.id)).toBe(false);
+      expect(s.stats.servicesDone).toBe(1);
+    }
+  });
+
+  it('the fee covers the parts with a profit', () => {
+    for (let seed = 40; seed < 60; seed++) {
+      const { s, c, car } = serviceCustomer(seed);
+      const o = c.service!;
+      const q = o.kind === 'repair' ? repairQuote(s, car, o.target as never) : upgradeQuote(s, o.target);
+      expect(o.fee).toBeGreaterThan(q.cost * 1.2);
+    }
+  });
+
+  it('a missed deadline means the customer takes the car off the lift and pays nothing', () => {
+    const { s, c, car } = serviceCustomer(61);
+    acceptService(s, c.id);
+    putOnLift(s, car.id);
+    const money = s.money;
+    tick(s, c.service!.due - s.minute + 1);
+    expect(s.customers.some((x) => x.id === c.id)).toBe(false);
+    expect(s.cars.some((x) => x.id === car.id)).toBe(false);
+    expect(s.lift.carId).toBeNull();
+    expect(s.money).toBe(money);
+  });
+
+  it('a car taken off the lift unfinished goes back to the buy-in zone', () => {
+    const { s, c, car } = serviceCustomer(62);
+    acceptService(s, c.id);
+    putOnLift(s, car.id);
+    expect(takeOffLift(s).ok).toBe(true);
+    expect(car.loc.kind).toBe('buyin');
   });
 });

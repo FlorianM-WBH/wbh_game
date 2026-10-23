@@ -12,7 +12,7 @@ import {
   makePalmTexture,
 } from '../art/textures';
 import { lotCapacity } from '../sim/economy';
-import { buildingLevel, carById, customerById, type Car, type SimEvent } from '../sim/state';
+import { buildingLevel, carById, customerById, formatTime, type Car, type SimEvent } from '../sim/state';
 import {
   AISLE_Y,
   BUYIN_CAR,
@@ -251,7 +251,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
           const c = customerById(s, e.customerId);
           if (!c) break;
           const home = this.npcHome(c.id);
-          if (c.intent === 'sell') {
+          if (c.carId != null) {
             // the seller gets out of their car once it is parked
             // the seller gets out once their car is parked (see updateNpcs)
             const v = this.addNpc(c.id, { x: BUYIN_CAR.x + 12, y: BUYIN_CAR.y + 4 });
@@ -545,7 +545,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
         continue;
       }
       const sp = toScreen(v.spr.x, v.spr.y - CHAR_H - 1);
-      const text = c.waitLeft < 30 ? 'Wird ungeduldig!' : c.intent === 'buy' ? 'Will kaufen' : 'Verkauft Auto';
+      const text = c.waitLeft < 30 ? 'Wird ungeduldig!' : c.intent === 'buy' ? 'Will kaufen' : c.intent === 'sell' ? 'Verkauft Auto' : c.service?.accepted ? `Abholung ${formatTime(c.service.due)}` : 'Werkstatt-Auftrag';
       ui.setBubble(`c${id}`, text, sp.x, sp.y);
     }
     this.renderHud();

@@ -17,7 +17,7 @@ export function newGame(seed = Date.now()): GameState {
     lift: { carId: null, job: null },
     techs: [],
     buildings: {},
-    stats: { carsSold: 0, carsBought: 0, revenue: 0, profit: 0, bestDeal: 0, repairsDone: 0, upgradesDone: 0 },
+    stats: { carsSold: 0, carsBought: 0, revenue: 0, profit: 0, bestDeal: 0, repairsDone: 0, upgradesDone: 0, servicesDone: 0 },
     ledger: { income: 0, expenses: 0, sold: 0, bought: 0 },
     spawnIn: 8,
     nextId: 1,

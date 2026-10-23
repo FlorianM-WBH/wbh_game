@@ -184,10 +184,55 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(100);
 
+  // service customer: accept the job, lift the car, do the work, hand it back
+  await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.customers = [];
+    mm.state.cars = mm.state.cars.filter((c) => c.loc.kind === 'lot');
+    mm.state.lift = { carId: null, job: null };
+    mm.state.minute = 9 * 60;
+    mm.app.scene.rebuildAll();
+  });
+  const svcId = await page.evaluate(() => window.__mm.spawn('service'));
+  check(svcId != null, 'service customer spawned');
+  await page.waitForTimeout(4500);
+  await page.evaluate((id) => window.__mm.interact({ kind: 'customer', customerId: id }), svcId);
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, '13-service-offer.png') });
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  check((await page.evaluate((id) => window.__mm.state.customers.find((c) => c.id === id)?.service?.accepted, svcId)) === true, 'service job accepted');
+  await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'lift' }));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(out, '14-service-lift.png') });
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.state.lift.job)) != null, 'service job started');
+  await page.evaluate(() => window.__mm.advance(5));
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(out, '15-service-working.png') });
+  await page.evaluate(() => {
+    window.__mm.state.lift.job.minutesLeft = 0.5;
+    window.__mm.advance(1);
+  });
+  const moneyBefore = await page.evaluate(() => window.__mm.state.money);
+  await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'lift' }));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, '16-service-paid.png') });
+  const moneyAfter = await page.evaluate(() => window.__mm.state.money);
+  check(moneyAfter > moneyBefore && (await page.evaluate(() => window.__mm.state.stats.servicesDone)) === 1, `service paid (+${moneyAfter - moneyBefore})`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(out, '17-service-car-leaves.png') });
+
   // evening
   await page.evaluate(() => window.__mm.advance(560));
   await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(out, '13-evening-or-summary.png') });
+  await page.screenshot({ path: path.join(out, '18-evening-or-summary.png') });
 
   check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
   await browser.close();
