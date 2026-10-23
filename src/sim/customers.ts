@@ -131,15 +131,17 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
     } else if (!c.served && !c.rejected?.length) addRep(s, -0.25);
   }
   // a seller who leaves without a deal drives their car away; a service customer always takes their car
+  let withCar: number | undefined;
   if (c.carId != null) {
     const car = s.cars.find((x) => x.id === c.carId);
     if (car && (car.loc.kind === 'buyin' || car.ownerId === c.id)) {
       s.cars = s.cars.filter((x) => x.id !== car.id);
       clearLiftFor(s, car.id);
+      withCar = car.id;
       emit(s, { type: 'carRemoved', carId: car.id });
     }
   }
-  emit(s, { type: 'customerLeft', customerId: id, name: c.name, reason });
+  emit(s, { type: 'customerLeft', customerId: id, name: c.name, reason, withCar });
 }
 
 export type Fit = 'good' | 'meh' | 'bad';

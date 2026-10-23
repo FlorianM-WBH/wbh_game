@@ -226,8 +226,10 @@ try {
   const moneyAfter = await page.evaluate(() => window.__mm.state.money);
   check(moneyAfter > moneyBefore && (await page.evaluate(() => window.__mm.state.stats.servicesDone)) === 1, `service paid (+${moneyAfter - moneyBefore})`);
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(out, '17-service-owner-walks-to-car.png') });
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: path.join(out, '17-service-car-leaves.png') });
+  await page.screenshot({ path: path.join(out, '17b-service-car-leaves.png') });
 
   // price tag: tag a lot car through its menu, then a browsing buyer walks up to it
   const tagCar = await page.evaluate(() => window.__mm.state.cars.find((c) => c.loc.kind === 'lot')?.id);

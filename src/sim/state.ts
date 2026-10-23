@@ -86,7 +86,7 @@ export interface Ledger {
 
 export type SimEvent =
   | { type: 'customerArrived'; customerId: number }
-  | { type: 'customerLeft'; customerId: number; name: string; reason: 'impatient' | 'done' | 'closing' }
+  | { type: 'customerLeft'; customerId: number; name: string; reason: 'impatient' | 'done' | 'closing'; withCar?: number }
   | { type: 'jobDone'; carId: number; job: Job }
   | { type: 'carAdded'; carId: number }
   | { type: 'carRemoved'; carId: number }

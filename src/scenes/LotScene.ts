@@ -57,6 +57,8 @@ interface NpcView {
   animT: number;
   /** hidden seller waiting for this car to park */
   carId?: number | null;
+  /** called once when the path is walked (e.g. getting into a car) */
+  onArrive?: () => void;
 }
 
 export class LotScene extends Phaser.Scene implements SceneHooks {
@@ -66,6 +68,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   private cars = new Map<number, CarView>();
   private npcs = new Map<number, NpcView>();
   private ghosts: NpcView[] = [];
+  /** cars waiting for their owner to get in (no longer in `cars`) */
+  private departing = new Set<CarView>();
   private tint!: Phaser.GameObjects.Rectangle;
   /** night lights: additive glow blobs that fade in at dusk */
   private nightLights: { img: Phaser.GameObjects.Image; a: number; when?: () => boolean }[] = [];
@@ -181,6 +185,11 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     }
     this.cars.clear();
     for (const v of [...this.npcs.values(), ...this.ghosts]) v.spr.destroy();
+    for (const v of this.departing) {
+      v.spr.destroy();
+      v.glow?.destroy();
+    }
+    this.departing.clear();
     this.npcs.clear();
     this.ghosts = [];
     const s = this.app.state;
@@ -253,6 +262,9 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
 
   onEvents(events: SimEvent[]): void {
     const s = this.app.state;
+    // cars whose owner walks over and drives them away (see customerLeft)
+    const pickups = new Set(events.flatMap((e) => (e.type === 'customerLeft' && e.withCar != null ? [e.withCar] : [])));
+    const parked = new Map<number, CarView>();
     for (const e of events) {
       switch (e.type) {
         case 'carAdded': {
@@ -277,6 +289,11 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
           const v = this.cars.get(e.carId);
           if (!v) break;
           this.cars.delete(e.carId);
+          if (pickups.has(e.carId) && !v.moving) {
+            parked.set(e.carId, v);
+            this.departing.add(v);
+            break;
+          }
           const dir = Math.random() < 0.5 ? -60 : WORLD_W + 60;
           this.drive(v, [{ x: v.spr.x, y: AISLE_Y }, { x: ENTRANCE.x, y: AISLE_Y }, { x: ENTRANCE.x, y: 326 }, { x: dir, y: 326 }], () => {
             v.spr.destroy();
@@ -327,6 +344,18 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
           const from = { x: v.spr.x, y: v.spr.y };
           const side = Math.random() < 0.5 ? -10 : WORLD_W + 10;
           v.path = [{ x: from.x, y: AISLE_Y }, { x: ENTRANCE.x, y: AISLE_Y }, ENTRANCE, { x: side, y: SIDEWALK_Y }];
+          const car = e.withCar != null ? parked.get(e.withCar) : undefined;
+          if (car) {
+            parked.delete(e.withCar!);
+            // walk to the driver's door, get in, drive off
+            const door = { x: car.spr.x - 12, y: car.spr.y + 6 };
+            v.path = car.spr.y < AISLE_Y - 40 ? [{ x: from.x, y: AISLE_Y }, { x: door.x, y: AISLE_Y }, door] : [door];
+            v.onArrive = () => {
+              v.spr.setVisible(false);
+              const dir = Math.random() < 0.5 ? -60 : WORLD_W + 60;
+              this.driveAway(car, dir);
+            };
+          }
           this.ghosts.push(v);
           this.app.ui.setBubble(`c${e.customerId}`, null);
           break;
@@ -335,7 +364,18 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
           break;
       }
     }
+    // owners without a sprite: the car just leaves
+    for (const v of parked.values()) this.driveAway(v, -60);
     if (this.lotLookKey() !== this.lastLook) this.redrawLot();
+  }
+
+  private driveAway(v: CarView, dir: number): void {
+    this.departing.add(v);
+    this.drive(v, [{ x: v.spr.x, y: AISLE_Y }, { x: ENTRANCE.x, y: AISLE_Y }, { x: ENTRANCE.x, y: 326 }, { x: dir, y: 326 }], () => {
+      this.departing.delete(v);
+      v.spr.destroy();
+      v.glow?.destroy();
+    });
   }
 
   /** Drive a car sprite along waypoints, turning to face each segment. */
@@ -534,6 +574,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       const moving = step(v);
       v.spr.setDepth(v.spr.y);
       if (!moving) {
+        v.onArrive?.();
         v.spr.destroy();
         return false;
       }
@@ -551,6 +592,10 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
         v.glow.setPosition(v.spr.x, v.spr.y).setAngle(v.spr.angle);
         v.glow.setDepth(v.spr.depth - 0.5).setAlpha(Math.min(1, (0.55 + 0.25 * Math.sin(t * 3 + id)) * (1 + 0.5 * this.night())));
       }
+    }
+    for (const v of this.departing) {
+      v.spr.setDepth(v.spr.y + 15);
+      v.glow?.setPosition(v.spr.x, v.spr.y).setAngle(v.spr.angle).setDepth(v.spr.depth - 0.5);
     }
     // price tags: a little swinging yellow card on the windscreen
     this.tags.clear();
