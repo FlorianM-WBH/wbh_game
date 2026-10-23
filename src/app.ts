@@ -144,7 +144,7 @@ export class App {
     el.append(h('div', 'logo', 'MIAMI MOTORS'), h('div', 'logo-sub', "Gebrauchtwagen '86"));
     const opts = h('div', 'options');
     const add = (label: string, fn: () => void) => {
-      const b = h('button', 'opt', `<span class="l">${esc(label)}</span>`);
+      const b = h('button', 'opt', `<span class="l">${opts.children.length + 1} · ${esc(label)}</span>`);
       b.addEventListener('click', fn);
       opts.append(b);
       return b;
@@ -171,6 +171,11 @@ export class App {
     this.ui.openCustom(el, (e) => {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'e') {
         (opts.firstElementChild as HTMLButtonElement).click();
+        return true;
+      }
+      const n = Number(e.key);
+      if (n >= 1 && n <= opts.children.length) {
+        (opts.children[n - 1] as HTMLButtonElement).click();
         return true;
       }
       return true;

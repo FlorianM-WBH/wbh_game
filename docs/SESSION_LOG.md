@@ -15,3 +15,12 @@ Newest entries at the bottom.
 - M3 (service customers): customers bring their own car for one paid job with a deadline; accept / haggle (+25%) / decline; lift menu for customer cars; tips for early hand-over; missed deadline = car and fee gone. Office shows the count of finished service jobs.
 - Verified: 23 unit tests (new `tests/unit/content.test.ts`: wishes, content completeness, tips, the full service flow, fee > parts, missed deadline); smoke test now 25 checks including an offline render of the music (rms ~0.04, peak ~0.35), the tips box, a wish in the customer menu and the complete service flow; screenshots checked by eye.
 - Learned: `page.evaluate(fn, arg)` silently passes `undefined` if the arg is forgotten, which looked like a sim bug. Vitest only picks up `tests/unit/**`, so throwaway analysis scripts must live there temporarily.
+
+## 2026-10-23 – Session 3 (autonomous)
+
+- **M4 deeper economy:** price tags with browsing buyers (speech-bubble rejections), dealer auction at the computer (new tech "BTX-Händlerauktion"), loan shark Tony with daily interest, automatic bailout and game over above $60k debt, reputation (0–5 stars) affecting customer rate and mood.
+- **M5 visuals:** second lift bay with the workshop upgrade (parallel jobs), night lights, customers walking to their car and driving off, back-view character frames, showroom display cars and neon trim, tuning hall checkers.
+- **M6 balance/goals:** human-like long-run bot plus pacing test (empire in 20–28 game days for the bot), records, richer victory stats, merged impatience toasts, victory check that does not depend on events.
+- **M7 polish:** pause menu (Esc), settings with volume levels, help overlay (F1), title screen number keys, README, GitHub Pages workflow, soak test (`npm run soak`).
+- Learned: running `npx prettier --write` without the project's style (single quotes, width 160) reformats whole files. Restore from git and re-apply edits instead. Prettier keeps objects expanded once it has split them, so reformatting with the right width does not undo the damage. `Phaser.Scene` already has a `lights` property; don't shadow it. Inserting a tutorial tip changes the bitmask of old saves; append instead.
+- Status set to DONE: all milestones implemented, and build, unit tests, smoke test and soak test pass.

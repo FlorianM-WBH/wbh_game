@@ -34,3 +34,15 @@ Decisions made without human input, with their reasons.
 - **Dealer auction** (tech "BTX-Händlerauktion", $4,000, Verkauf branch, no prerequisite): at the computer, 3 lots per day (generated on first look), any class, 30% with an extra, price 72–95% of market value + $150 fee. Exact condition only with the "Gutachter" tech, otherwise rough labels and "Marktwert unbekannt" – a deliberate gamble. Bought cars are delivered to a free slot.
 - **Tip "Preisschild anbringen"** appended as the 7th first-steps tip (appended, not inserted, so the bitmask in old saves stays valid).
 - Save version stays 1; all new fields are optional.
+
+## 2026-10-23 – Session 3 (M5–M7)
+
+- **Second lift** comes with the first workshop upgrade (level 1 "Profi-Werkstatt"), not level 2, so the cheap early building upgrade is attractive. Implemented as `state.lift` (bay 0) plus optional `state.lift2` (bay 1) instead of an array, so old saves and existing code keep working; workshop functions take an optional `bay`. "In die Werkstatt fahren" uses the first free bay. Holding E boosts only the bay the player stands at.
+- **Night:** additive "light" blobs (street lamps, neon sign, ANKAUF sign, bar, windows, workshop doors) fade in from 17:00 to 19:00 on top of the existing evening tint. Four street lamps were added to the sidewalk art.
+- **Customers leaving with their car** walk to it, get in, and the car drives off (scene-only; the sim removes both at once and tags the `customerLeft` event with `withCar`).
+- **Back-view frames** (2, 3) for all characters, used when walking upward; side and down use the front frames.
+- **Showroom detail:** level 1 shows a red display car (front view, fits the buildings' front perspective), checkered floor and a palm; level 2 adds a second car, a disco ball and neon tubes. Tuning hall (workshop 2) gets racing checkers.
+- **Pacing (M6):** a human-like bot (`tests/unit/playbot.ts`: no peeking at hidden limits, takes all service jobs, repairs, tunes, buys progression when it has a reserve) finishes the empire in 20–28 game days (seeds 1–5). It serves every customer instantly, so real players should need noticeably longer, roughly 3–5 hours at ~6 real minutes per day. Costs were left unchanged; `tests/unit/longrun.test.ts` guards 15–45 days and no debt.
+- **Records** (localStorage `miami-motors-86-records`): best sales profit, best company worth (cash − debt + stock cost), best deal, fastest empire day. Shown on the title screen, in the office ("Statistik & Rekorde"), on the victory screen and the day summary ("Neuer Rekord").
+- **Pause menu on Esc** (only when no menu is open) with help, settings, save, back to title. **F1** opens help. Settings are keyboard-friendly: each volume (master, music, effects) steps +10% per press and wraps to 0; persisted with the existing audio prefs.
+- **Deployment:** `dist/` is static with relative paths; `.github/workflows/pages.yml` deploys to GitHub Pages on push to main. Nothing was pushed (the origin remote exists, but publishing was not requested).
