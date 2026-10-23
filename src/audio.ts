@@ -9,13 +9,30 @@ let musicBus: GainNode | null = null;
 const PREFS_KEY = 'miami-motors-86-audio';
 const prefs = loadPrefs();
 
-function loadPrefs(): { muted: boolean; music: boolean } {
+export type VolumeKind = 'master' | 'music' | 'sfx';
+
+interface Prefs {
+  muted: boolean;
+  music: boolean;
+  vol: Record<VolumeKind, number>;
+}
+
+function loadPrefs(): Prefs {
+  const vol = { master: 0.8, music: 0.8, sfx: 0.8 };
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-    return { muted: !!p.muted, music: p.music !== false };
+    return { muted: !!p.muted, music: p.music !== false, vol: { ...vol, ...(p.vol ?? {}) } };
   } catch {
-    return { muted: false, music: true };
+    return { muted: false, music: true, vol };
   }
+}
+
+function masterGain(): number {
+  return prefs.muted ? 0 : prefs.vol.master;
+}
+
+function musicGain(): number {
+  return prefs.music ? prefs.vol.music : 0;
 }
 
 function savePrefs(): void {
@@ -32,12 +49,13 @@ export function audioContext(): AudioContext | null {
     if (!ctx) {
       ctx = new AudioContext();
       master = ctx.createGain();
-      master.gain.value = prefs.muted ? 0 : 1;
+      master.gain.value = masterGain();
       master.connect(ctx.destination);
       sfxBus = ctx.createGain();
+      sfxBus.gain.value = prefs.vol.sfx;
       sfxBus.connect(master);
       musicBus = ctx.createGain();
-      musicBus.gain.value = prefs.music ? 1 : 0;
+      musicBus.gain.value = musicGain();
       musicBus.connect(master);
     }
     if (ctx.state === 'suspended') void ctx.resume();
@@ -114,7 +132,7 @@ function ramp(node: GainNode | null, to: number): void {
 export function toggleMute(): boolean {
   prefs.muted = !prefs.muted;
   savePrefs();
-  ramp(master, prefs.muted ? 0 : 1);
+  ramp(master, masterGain());
   return prefs.muted;
 }
 
@@ -122,8 +140,21 @@ export function toggleMute(): boolean {
 export function toggleMusic(): boolean {
   prefs.music = !prefs.music;
   savePrefs();
-  ramp(musicBus, prefs.music ? 1 : 0);
+  ramp(musicBus, musicGain());
   return prefs.music;
+}
+
+export function volume(kind: VolumeKind): number {
+  return prefs.vol[kind];
+}
+
+/** Set a volume 0..1 (persisted). */
+export function setVolume(kind: VolumeKind, v: number): void {
+  prefs.vol[kind] = Math.max(0, Math.min(1, Math.round(v * 10) / 10));
+  savePrefs();
+  ramp(master, masterGain());
+  ramp(musicBus, musicGain());
+  ramp(sfxBus, prefs.vol.sfx);
 }
 
 export function musicEnabled(): boolean {

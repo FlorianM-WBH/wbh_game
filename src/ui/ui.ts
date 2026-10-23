@@ -46,7 +46,7 @@ export class UI {
     this.prompt.style.display = 'none';
     this.toasts = h('div', 'toasts');
     this.tips = h('div', 'tips');
-    const help = h('div', 'help', '<span class="key">WASD</span>/Pfeile laufen · <span class="key">E</span>/Leertaste benutzen (an der Hebebühne halten = mit anpacken) · <span class="key">M</span> Ton · <span class="key">N</span> Musik · <span class="key">H</span> Tipps');
+    const help = h('div', 'help', '<span class="key">WASD</span>/Pfeile laufen · <span class="key">E</span>/Leertaste benutzen (an der Hebebühne halten = mit anpacken) · <span class="key">M</span> Ton · <span class="key">N</span> Musik · <span class="key">H</span> Tipps · <span class="key">Esc</span> Pause · <span class="key">F1</span> Hilfe');
     root.append(this.hud, this.tips, this.prompt, this.toasts, help);
     window.addEventListener('keydown', (e) => {
       if (this.keyHandler && this.keyHandler(e)) {

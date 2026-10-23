@@ -355,6 +355,22 @@ try {
   await page.waitForTimeout(600);
   await page.screenshot({ path: path.join(out, '22b-night.png') });
 
+  // pause menu with settings: Esc on the lot, volume step, back to the game
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'Pause', 'Esc opens the pause menu');
+  await page.keyboard.press('2');
+  await page.waitForTimeout(150);
+  const vol = await page.evaluate(() => JSON.parse(localStorage.getItem('miami-motors-86-audio') ?? '{}').vol?.master ?? 0.8);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, '22c-settings.png') });
+  const vol2 = await page.evaluate(() => JSON.parse(localStorage.getItem('miami-motors-86-audio') ?? '{}').vol?.master);
+  check(vol2 !== undefined && vol2 !== vol, `master volume changes (${vol} -> ${vol2})`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === null, 'settings close back to the game');
+
   // evening
   await page.evaluate(() => window.__mm.advance(560));
   await page.waitForTimeout(300);

@@ -6,7 +6,7 @@ import { UPGRADE_REMARKS } from './content/remarks';
 import { COMPONENTS, COMPONENT_LABEL, UPGRADES, UPGRADE_BY_ID } from './content/workshop';
 import { drawCharacter } from './art/charArt';
 import { customerLook } from './art/textures';
-import { sfx, toggleMusic, toggleMute } from './audio';
+import { setVolume, sfx, toggleMusic, toggleMute, volume, type VolumeKind } from './audio';
 import { startMusic } from './music';
 import { currentTip, TIPS } from './tutorial';
 import { archetypeOf } from './sim/customers';
@@ -76,6 +76,11 @@ export class App {
         if (!this.ui.isOpen) this.ui.toast(toggleMute() ? 'Ton aus' : 'Ton an');
       }
       if ((e.key === 'h' || e.key === 'H') && !this.ui.isOpen) this.tipsHidden = !this.tipsHidden;
+      if (e.key === 'Escape' && this.started && !this.ui.isOpen) this.pauseMenu();
+      if (e.key === 'F1' && this.started && !this.ui.isOpen) {
+        e.preventDefault();
+        this.helpMenu();
+      }
       if (e.key === 'n' || e.key === 'N') {
         if (!this.ui.isOpen) this.ui.toast(toggleMusic() ? 'Musik an' : 'Musik aus');
       }
@@ -151,6 +156,7 @@ export class App {
     };
     if (this.hasSave()) add('Weiterspielen', go(() => this.continueGame()));
     add('Neues Spiel', go(() => this.startNew()));
+    add('Einstellungen', go(() => this.settingsMenu(() => this.titleScreen())));
     el.append(opts, h('div', 'tagline', 'Dicke Schlitten. Dünne Ausreden. Neon bis zum Horizont.'));
     const rec = readRecords();
     if (rec)
@@ -181,6 +187,74 @@ export class App {
         `<p>Jeden Abend um 20:00 werden <b>${formatMoney(dailyRent(this.state))}</b> Miete fällig. Onkel Sals Kredithai hat keinen Humor.</p>`,
       options: [],
       closeLabel: "Los geht's!",
+    });
+  }
+
+  // ---------- pause, settings, help ----------
+
+  pauseMenu(): void {
+    this.ui.menu({
+      title: 'Pause',
+      sub: `Tag ${this.state.day}, ${formatTime(this.state.minute)}`,
+      options: [
+        { label: 'Hilfe & Steuerung', action: () => this.helpMenu() },
+        { label: 'Einstellungen', desc: 'Lautstärke', action: () => this.settingsMenu() },
+        { label: 'Spiel speichern', action: () => (this.save(), this.ui.toast('Gespeichert.'), this.ui.close()) },
+        {
+          label: 'Speichern und zum Titelbildschirm',
+          action: () => {
+            this.save();
+            this.ui.close();
+            this.started = false;
+            this.titleScreen();
+          },
+        },
+      ],
+      closeLabel: 'Weiterspielen',
+    });
+  }
+
+  settingsMenu(onDone?: () => void): void {
+    const bar = (v: number) => '█'.repeat(Math.round(v * 10)) + '░'.repeat(10 - Math.round(v * 10));
+    const row = (kind: VolumeKind, label: string): MenuOption => ({
+      label: `${label}: ${Math.round(volume(kind) * 100)}%`,
+      desc: 'Auswählen = +10% (nach 100% wieder 0%)',
+      right: bar(volume(kind)),
+      action: () => {
+        const v = volume(kind);
+        setVolume(kind, v >= 0.99 ? 0 : v + 0.1);
+        sfx('click');
+        this.settingsMenu(onDone);
+      },
+    });
+    this.ui.menu({
+      title: 'Einstellungen',
+      body: '<p class="sub"><span class="key">M</span> schaltet jederzeit alles stumm, <span class="key">N</span> die Musik.</p>',
+      options: [row('master', 'Gesamtlautstärke'), row('music', 'Musik'), row('sfx', 'Effekte')],
+      closeLabel: 'Fertig',
+      onClose: onDone,
+    });
+  }
+
+  helpMenu(): void {
+    this.ui.menu({
+      title: 'Hilfe & Steuerung',
+      body:
+        '<table class="stats">' +
+        '<tr><td><span class="key">WASD</span> / Pfeiltasten</td><td>Laufen</td></tr>' +
+        '<tr><td><span class="key">E</span> / Leertaste</td><td>Benutzen, ansprechen</td></tr>' +
+        '<tr><td><span class="key">E</span> an der Hebebühne halten</td><td>Mit anpacken (3× schneller)</td></tr>' +
+        '<tr><td><span class="key">1</span>–<span class="key">9</span>, Pfeile, <span class="key">Enter</span></td><td>Menüpunkte wählen</td></tr>' +
+        '<tr><td><span class="key">Esc</span></td><td>Zurück / Pause</td></tr>' +
+        '<tr><td><span class="key">M</span> / <span class="key">N</span></td><td>Ton / Musik an/aus</td></tr>' +
+        '<tr><td><span class="key">H</span></td><td>Tipps ein-/ausblenden</td></tr>' +
+        '<tr><td><span class="key">F1</span></td><td>Diese Hilfe</td></tr>' +
+        '</table>' +
+        '<p><b>So läuft das Geschäft:</b> Autos an der <span class="tag">ANKAUF</span>-Zone günstig kaufen, an der Hebebühne reparieren und tunen, ' +
+        'dann teuer an Käufer verhandeln – oder ein <b>Preisschild</b> dranhängen. Werkstatt-Kunden zahlen für Aufträge, wenn du pünktlich bist. ' +
+        'Im Büro baust du die Firma aus und rufst notfalls den Kredithai an, am Computer schaltest du Technik frei. ' +
+        'Dein <b>Ruf</b> (Sterne) bringt mehr und freundlichere Kunden. Ziel: Imperium 100%.</p>',
+      options: [],
     });
   }
 
