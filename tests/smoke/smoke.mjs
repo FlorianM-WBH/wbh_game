@@ -347,6 +347,8 @@ try {
     const mm = window.__mm;
     mm.state.buildings.neonschild = 1;
     mm.state.buildings.kaffeebar = 1;
+    mm.state.buildings.showroom = 2;
+    mm.state.buildings.werkstatt = 2;
     mm.state.minute = 19 * 60 + 20;
     mm.app.scene.rebuildAll();
   });

@@ -64,6 +64,25 @@ function drawFlamingo(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.fillRect(x + 2, y - 7, 1, 7);
 }
 
+/** A display car seen from the front (for the showroom window), centred at x, bottom at y. */
+function drawFrontCar(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+  const px = (dx: number, dy: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x + dx, y + dy, w, h);
+  };
+  px(-17, -1, 34, 1, 'rgba(10,0,30,0.45)'); // shadow
+  px(-16, -9, 32, 7, color); // body
+  px(-12, -15, 24, 6, shade(color, -0.15)); // roof
+  px(-10, -14, 20, 4, '#8ef0ff'); // windscreen
+  px(-9, -14, 4, 1, '#ffffff');
+  px(-16, -9, 32, 1, shade(color, 0.3));
+  px(-14, -7, 5, 2, '#fff2a0'); // headlights
+  px(9, -7, 5, 2, '#fff2a0');
+  px(-6, -6, 12, 2, '#1a1a1a'); // grille
+  px(-15, -3, 4, 2, '#1a1a1a'); // tyres
+  px(11, -3, 4, 2, '#1a1a1a');
+}
+
 export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
   // asphalt
   ctx.fillStyle = '#3d3550';
@@ -88,6 +107,32 @@ export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
     for (let i = 0; i < 6; i++) ctx.fillRect(136 + i * 18, glassTop + 2, 3, 48);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(130, glassTop, 112, 1);
+    // showroom floor and display cars behind the glass
+    for (let i = 0; i < 14; i++) {
+      ctx.fillStyle = i % 2 ? '#f0f0f0' : '#2a1e3a';
+      ctx.fillRect(130 + i * 8, 86, 8, 3);
+      ctx.fillStyle = i % 2 ? '#2a1e3a' : '#f0f0f0';
+      ctx.fillRect(130 + i * 8, 89, 8, 3);
+    }
+    drawFrontCar(ctx, look.showroom >= 2 ? 160 : 186, 86, '#e83c3c');
+    if (look.showroom >= 2) {
+      drawFrontCar(ctx, 212, 86, '#f5f5f0');
+      // disco ball
+      ctx.fillStyle = '#c8c8d8';
+      ctx.fillRect(184, glassTop + 4, 6, 6);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(185, glassTop + 5, 2, 2);
+      ctx.fillRect(188, glassTop + 8, 1, 1);
+      ctx.fillStyle = '#5a5060';
+      ctx.fillRect(186, glassTop, 1, 4);
+    }
+    // potted palm
+    ctx.fillStyle = '#a05a3a';
+    ctx.fillRect(233, 80, 6, 6);
+    ctx.fillStyle = '#2ab45a';
+    ctx.fillRect(231, 72, 2, 8);
+    ctx.fillRect(235, 70, 2, 10);
+    ctx.fillRect(239, 73, 2, 7);
   } else {
     for (let i = 0; i < 3; i++) {
       ctx.fillStyle = '#5ad8e8';
@@ -112,6 +157,16 @@ export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
   ctx.fillRect(10, 90, 240, 2);
   ctx.fillStyle = '#ffd23c';
   ctx.fillRect(10, 93, 240, 1);
+
+  // neon palace: pink and cyan tubes along the roof edge and the corners
+  if (look.showroom >= 2) {
+    ctx.fillStyle = '#ff5ad8';
+    ctx.fillRect(10, 14, 240, 1);
+    ctx.fillRect(10, 14, 1, 82);
+    ctx.fillRect(249, 14, 1, 82);
+    ctx.fillStyle = '#3cf0e0';
+    ctx.fillRect(12, 31, 236, 1);
+  }
 
   // sign on the roof
   if (look.neonSign) {
@@ -179,6 +234,15 @@ export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
   ctx.fillRect(408, 70, 30, 24); // tool chest
   ctx.fillStyle = '#a01e1e';
   for (let i = 0; i < 4; i++) ctx.fillRect(408, 74 + i * 5, 30, 1);
+  if (look.werkstatt >= 2) {
+    // racing checkers along the top of the tuning hall
+    for (let i = 0; i < 42; i++) {
+      ctx.fillStyle = i % 2 ? '#1a1a1a' : '#f0f0f0';
+      ctx.fillRect(282 + i * 4, 35, 4, 2);
+      ctx.fillStyle = i % 2 ? '#f0f0f0' : '#1a1a1a';
+      ctx.fillRect(282 + i * 4, 37, 4, 2);
+    }
+  }
   drawPixelText(ctx, look.werkstatt >= 2 ? 'TUNING' : 'WERKSTATT', look.werkstatt >= 2 ? 347 : 338, 22, '#1e3a5a');
 
   // right block: palms and the bar
