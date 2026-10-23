@@ -360,8 +360,24 @@ try {
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, '23-evening-or-summary.png') });
 
-  // heavy debt at closing: game over, then a fresh game
+  // complete empire: victory screen with stats, records saved
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.techs = ['druckluft', 'teilehandel', 'gutachter', 'hebebuehne2', 'neon', 'chrom', 'lackiererei', 'sattlerei', 'elektronik', 'turbo', 'rhetorik', 'menschenkenner', 'charmeoffensive', 'auktion', 'radio', 'tvspot'];
+    mm.state.buildings = { parkplatz: 3, showroom: 2, werkstatt: 2, neonschild: 1, kaffeebar: 1, deko: 1 };
+    mm.app.scene.rebuildAll();
+    mm.spawn('buy');
+  });
+  await page.waitForTimeout(300);
+  check((await page.evaluate(() => window.__mm.menuTitle())) === 'IMPERIUM KOMPLETT!', 'victory screen at 100%');
+  await page.screenshot({ path: path.join(out, '23b-victory.png') });
+  check((await page.evaluate(() => JSON.parse(localStorage.getItem('miami-motors-86-records') ?? 'null')?.imperiumDay)) != null, 'records saved');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+
+  // heavy debt at closing: game over, then a fresh game
   await page.evaluate(() => {
     window.__mm.state.debt = 70000;
     window.__mm.advance(800);

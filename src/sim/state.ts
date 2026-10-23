@@ -142,6 +142,8 @@ export interface GameState {
   debt?: number;
   /** set when the loan shark loses patience */
   over?: boolean;
+  /** the day the empire was completed (for records) */
+  doneDay?: number;
   /** today's dealer auction (computer, needs the 'auktion' tech) */
   auction?: { day: number; lots: AuctionLot[] };
 }

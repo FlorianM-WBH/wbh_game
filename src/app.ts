@@ -26,6 +26,24 @@ import { esc, h, UI, type MenuOption } from './ui/ui';
 import type { StationId } from './scenes/layout';
 
 const SAVE_KEY = 'miami-motors-86-save';
+const RECORD_KEY = 'miami-motors-86-records';
+
+/** Best results over all games, kept in localStorage. */
+interface Records {
+  profit: number;
+  worth: number;
+  bestDeal: number;
+  imperiumDay: number | null;
+}
+
+function readRecords(): Records | null {
+  try {
+    const raw = localStorage.getItem(RECORD_KEY);
+    return raw ? (JSON.parse(raw) as Records) : null;
+  } catch {
+    return null;
+  }
+}
 /** game minutes per real millisecond (2 game minutes per second) */
 export const TIME_SCALE = 2 / 1000;
 export const WORK_BOOST = 3;
@@ -134,6 +152,16 @@ export class App {
     if (this.hasSave()) add('Weiterspielen', go(() => this.continueGame()));
     add('Neues Spiel', go(() => this.startNew()));
     el.append(opts, h('div', 'tagline', 'Dicke Schlitten. Dünne Ausreden. Neon bis zum Horizont.'));
+    const rec = readRecords();
+    if (rec)
+      el.append(
+        h(
+          'div',
+          'records',
+          `Rekorde: Gewinn ${formatMoney(rec.profit)} · Firmenwert ${formatMoney(rec.worth)} · Bester Deal ${formatMoney(rec.bestDeal)}` +
+            (rec.imperiumDay != null ? ` · Imperium an Tag ${rec.imperiumDay}` : ''),
+        ),
+      );
     this.ui.openCustom(el, (e) => {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'e') {
         (opts.firstElementChild as HTMLButtonElement).click();
@@ -168,25 +196,30 @@ export class App {
   /** Process sim events: sounds, toasts, day summary, then hand them to the scene. */
   flush(): void {
     const events = drainEvents(this.state);
-    if (!events.length) return;
-    for (const e of events) {
-      if (e.type === 'toast') this.ui.toast(e.text);
-      if (e.type === 'customerArrived') sfx('arrive');
-      if (e.type === 'jobDone') sfx('job');
-      if (e.type === 'customerLeft' && e.reason === 'impatient') {
-        this.ui.toast(`${e.name} hatte keine Lust mehr zu warten und ist gegangen.`);
+    if (events.length) {
+      const gone: string[] = [];
+      for (const e of events) {
+        if (e.type === 'toast') this.ui.toast(e.text);
+        if (e.type === 'customerArrived') sfx('arrive');
+        if (e.type === 'jobDone') sfx('job');
+        if (e.type === 'customerLeft' && e.reason === 'impatient') gone.push(e.name);
       }
+      if (gone.length === 1) this.ui.toast(`${gone[0]} hatte keine Lust mehr zu warten und ist gegangen.`);
+      else if (gone.length > 1) this.ui.toast(`${gone.length} Kunden hatten keine Lust mehr zu warten und sind gegangen.`);
+      this.scene?.onEvents(events);
+      const over = events.find((e) => e.type === 'gameOver');
+      if (over && over.type === 'gameOver') return this.gameOver(over.debt);
+      const day = events.find((e) => e.type === 'dayEnded');
+      if (day && day.type === 'dayEnded') this.daySummary(day);
     }
-    this.scene?.onEvents(events);
-    const over = events.find((e) => e.type === 'gameOver');
-    if (over && over.type === 'gameOver') return this.gameOver(over.debt);
-    const day = events.find((e) => e.type === 'dayEnded');
-    if (day && day.type === 'dayEnded') this.daySummary(day);
-    if (!this.wonShown && completion(this.state) >= 1) {
+    // the victory screen waits until no other dialog is showing
+    if (!this.wonShown && completion(this.state) >= 1 && !this.ui.isOpen) {
       this.wonShown = true;
+      this.state.doneDay ??= this.state.day;
       this.victory();
     }
   }
+
 
   private result(r: ActionResult, okSound: 'cash' | 'open' = 'open'): boolean {
     if (!r.ok) {
@@ -256,6 +289,21 @@ export class App {
           label: 'Kredithai anrufen',
           desc: debt(s) > 0 ? `Du schuldest ${SHARK_NAME} ${formatMoney(debt(s))}.` : `${SHARK_NAME} leiht dir Geld. Zu Zinsen, die man in Florida nicht laut sagt.`,
           action: () => this.sharkMenu(),
+        },
+        {
+          label: 'Statistik & Rekorde',
+          action: () => {
+            const rec = readRecords();
+            this.ui.menu({
+              title: 'Statistik',
+              body:
+                this.statsTable() +
+                (rec
+                  ? `<p class="sub">Rekorde aller Spiele: Gewinn ${formatMoney(rec.profit)} · Firmenwert ${formatMoney(rec.worth)} · Bester Deal ${formatMoney(rec.bestDeal)}${rec.imperiumDay != null ? ` · Imperium an Tag ${rec.imperiumDay}` : ''}</p>`
+                  : ''),
+              options: [],
+            });
+          },
         },
         { label: 'Spiel speichern', action: () => (this.save(), this.ui.toast('Gespeichert.'), this.ui.close()) },
         {
@@ -831,10 +879,47 @@ export class App {
 
   // ---------- day end / victory ----------
 
+  /** Company worth: cash minus debt plus what the stock cost. */
+  worth(): number {
+    const s = this.state;
+    return s.money - debt(s) + lotCars(s).reduce((a, c) => a + c.invested, 0);
+  }
+
+  /** Merge this game's results into the records; returns the names of broken records. */
+  updateRecords(): string[] {
+    const s = this.state;
+    const old = readRecords();
+    const r: Records = old ? { ...old } : { profit: 0, worth: 0, bestDeal: 0, imperiumDay: null };
+    const broken: string[] = [];
+    if (s.stats.profit > r.profit) {
+      r.profit = s.stats.profit;
+      if (old) broken.push('Gesamtgewinn');
+    }
+    if (this.worth() > r.worth) {
+      r.worth = this.worth();
+      if (old) broken.push('Firmenwert');
+    }
+    if (s.stats.bestDeal > r.bestDeal) {
+      r.bestDeal = s.stats.bestDeal;
+      if (old) broken.push('Bester Deal');
+    }
+    if (s.doneDay != null && (r.imperiumDay == null || s.doneDay < r.imperiumDay)) {
+      r.imperiumDay = s.doneDay;
+      broken.push('Schnellstes Imperium');
+    }
+    try {
+      localStorage.setItem(RECORD_KEY, JSON.stringify(r));
+    } catch {
+      /* storage may be unavailable */
+    }
+    return broken;
+  }
+
   daySummary(e: Extract<SimEvent, { type: 'dayEnded' }>): void {
     const l = e.ledger;
     const net = l.income - l.expenses;
     this.save();
+    const broken = this.updateRecords();
     this.ui.menu({
       title: `Feierabend! Tag ${e.day}`,
       sub: 'Die Sonne geht unter, die Neonröhren gehen an.',
@@ -851,6 +936,7 @@ export class App {
         `</table>` +
         (e.bailout > 0 ? `<p class="bad">Du warst im Minus! ${SHARK_NAME} hat ${formatMoney(e.bailout)} vorgestreckt (inkl. 20% „Bearbeitungsgebühr“).</p>` : '') +
         (debt(this.state) > WARN_DEBT ? `<p class="bad">„${esc(SHARK_WARN[e.day % SHARK_WARN.length])}“ Ab ${formatMoney(GAME_OVER_DEBT)} Schulden ist Schluss!</p>` : '') +
+        (broken.length ? `<p class="good">Neuer Rekord: ${esc(broken.join(', '))}!</p>` : '') +
         '<p class="sub">Automatisch gespeichert.</p>',
       options: [],
       closeLabel: `Tag ${this.state.day} beginnen`,
@@ -865,6 +951,7 @@ export class App {
       /* storage may be unavailable */
     }
     sfx('walkout');
+    this.updateRecords();
     this.ui.menu({
       title: 'GAME OVER',
       sub: `Tag ${s.day} · Schulden: ${formatMoney(finalDebt)}`,
@@ -880,14 +967,37 @@ export class App {
   }
 
   victory(): void {
+    const s = this.state;
+    const broken = this.updateRecords();
     this.ui.menu({
       title: 'IMPERIUM KOMPLETT!',
+      sub: `Geschafft an Tag ${s.doneDay ?? s.day}`,
       body:
         '<p>Jede Technik freigeschaltet, jedes Gebäude ausgebaut. Don Johnson fragt, ob er bei dir in die Lehre gehen darf.</p>' +
-        `<p>Gesamtgewinn: <b>${formatMoney(this.state.stats.profit)}</b> · Verkaufte Autos: <b>${this.state.stats.carsSold}</b></p>` +
+        this.statsTable() +
+        (broken.length ? `<p class="good">Neuer Rekord: ${esc(broken.join(', '))}!</p>` : '') +
         '<p>Du kannst weiterspielen und deinen Gewinn maximieren.</p>',
       options: [],
       closeLabel: 'Weiter verkaufen',
     });
   }
+
+  statsTable(): string {
+    const s = this.state;
+    const st = s.stats;
+    const rows: [string, string][] = [
+      ['Gespielte Tage', String(s.day)],
+      ['Verkaufte Autos (davon zum Schildpreis)', `${st.carsSold} (${st.tagSales ?? 0})`],
+      ['Angekaufte Autos (davon ersteigert)', `${st.carsBought} (${st.auctionBuys ?? 0})`],
+      ['Werkstatt-Aufträge', String(st.servicesDone ?? 0)],
+      ['Reparaturen / Extras eingebaut', `${st.repairsDone} / ${st.upgradesDone}`],
+      ['Umsatz aus Autoverkäufen', formatMoney(st.revenue)],
+      ['Gesamtgewinn aus Verkäufen', formatMoney(st.profit)],
+      ['Bester Deal', formatMoney(st.bestDeal)],
+      ['Firmenwert (Kasse − Schulden + Bestand)', formatMoney(this.worth())],
+      ['Ruf', repLabel(s)],
+    ];
+    return `<table class="stats">${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
+  }
+
 }

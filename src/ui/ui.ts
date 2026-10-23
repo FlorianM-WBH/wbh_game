@@ -96,7 +96,7 @@ export class UI {
     const t = h('div', 'toast');
     t.textContent = text;
     this.toasts.append(t);
-    while (this.toasts.children.length > 5) this.toasts.firstElementChild!.remove();
+    while (this.toasts.children.length > 4) this.toasts.firstElementChild!.remove();
     setTimeout(() => t.remove(), ms);
   }
 

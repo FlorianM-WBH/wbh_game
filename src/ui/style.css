@@ -440,6 +440,11 @@ table.stats td:last-child {
 .title-screen .options {
   width: 16em;
 }
+.title-screen .records {
+  margin-top: 0.6em;
+  color: var(--yellow);
+  font-size: 0.8em;
+}
 .title-screen .tagline {
   margin-top: 0.8em;
   color: var(--dim);
