@@ -75,6 +75,13 @@ try {
   await page.keyboard.up('ArrowDown');
   const after = await page.evaluate(() => ({ x: window.__mm.app.scene.player.x, y: window.__mm.app.scene.player.y }));
   check(after.y > before.y + 5, `player walks (y ${before.y.toFixed(1)} -> ${after.y.toFixed(1)})`);
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(250);
+  await page.keyboard.up('ArrowUp');
+  await page.waitForTimeout(50);
+  const up = await page.evaluate(() => ({ x: window.__mm.app.scene.player.x, y: window.__mm.app.scene.player.y, f: window.__mm.app.scene.player.frame.name }));
+  check(up.f === 2, `player shows the back view after walking up (frame ${up.f})`);
+  await page.screenshot({ path: path.join(out, '02b-player-back.png'), clip: { x: up.x * 2 - 60, y: up.y * 2 - 70, width: 120, height: 90 } });
 
   // real keyboard interaction: stand at the office door and press E
   await page.evaluate(() => window.__mm.teleport(92, 112));

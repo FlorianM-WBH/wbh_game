@@ -78,6 +78,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   /** short-lived speech bubbles (customer id -> text and expiry in scene time) */
   private says = new Map<number, { text: string; until: number }>();
   private walkT = 0;
+  /** player last walked upwards (show the back view) */
+  private facingBack = false;
   private target: Target | null = null;
   private lastLook = '';
   /** set on key-down so even very short taps register */
@@ -476,10 +478,11 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       if (!this.blocked(nx, this.player.y, rects)) this.player.x = nx;
       if (!this.blocked(this.player.x, ny, rects)) this.player.y = ny;
       if (mx) this.player.setFlipX(mx < 0);
+      this.facingBack = my < 0 || (my === 0 && !mx && this.facingBack);
       this.walkT += dt;
-      this.player.setFrame(Math.floor(this.walkT * 7) % 2);
+      this.player.setFrame((this.facingBack ? 2 : 0) + (Math.floor(this.walkT * 7) % 2));
     } else {
-      this.player.setFrame(0);
+      this.player.setFrame(this.facingBack ? 2 : 0);
     }
     this.player.setDepth(this.player.y);
 
@@ -563,7 +566,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       }
       if (Math.abs(dx) > 0.5) v.spr.setFlipX(dx < 0);
       v.animT += dt;
-      v.spr.setFrame(Math.floor(v.animT * 6) % 2);
+      const up = dy < -0.5 && Math.abs(dy) > Math.abs(dx);
+      v.spr.setFrame((up ? 2 : 0) + (Math.floor(v.animT * 6) % 2));
       return true;
     };
     for (const v of this.npcs.values()) {

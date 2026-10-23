@@ -28,15 +28,15 @@ export function ensureCarTexture(scene: Phaser.Scene, car: Car): string {
   return key;
 }
 
-/** Character texture with two frames: 0 = stand, 1 = step. */
+/** Character texture with four frames: 0 = stand, 1 = step (front); 2, 3 = the same from behind. */
 export function ensureCharTexture(scene: Phaser.Scene, key: string, look: CharLook): string {
   if (scene.textures.exists(key)) return key;
-  const tex = scene.textures.createCanvas(key, CHAR_W * 2, CHAR_H)!;
+  const tex = scene.textures.createCanvas(key, CHAR_W * 4, CHAR_H)!;
   const ctx = tex.getContext();
-  drawCharacter(ctx, look, 0, 0, 0);
-  drawCharacter(ctx, look, CHAR_W, 0, 1);
-  tex.add(0, 0, 0, 0, CHAR_W, CHAR_H);
-  tex.add(1, 0, CHAR_W, 0, CHAR_W, CHAR_H);
+  for (let f = 0; f < 4; f++) {
+    drawCharacter(ctx, look, CHAR_W * f, 0, (f % 2) as 0 | 1, f >= 2);
+    tex.add(f, 0, CHAR_W * f, 0, CHAR_W, CHAR_H);
+  }
   tex.refresh();
   return key;
 }

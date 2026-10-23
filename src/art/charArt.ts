@@ -1,4 +1,4 @@
-// Procedural 12x20 characters, front-facing, composed from look layers.
+// Procedural 12x20 characters (front and back views), composed from look layers.
 import type { HairStyle, TopStyle } from '../content/archetypes';
 import { shade } from './carArt';
 
@@ -18,8 +18,8 @@ export interface CharLook {
   chain?: boolean;
 }
 
-/** Draw one frame at (x0, y0). frame 0 = standing, 1 = step. */
-export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0: number, y0: number, frame: 0 | 1): void {
+/** Draw one frame at (x0, y0). frame 0 = standing, 1 = step; `back` = seen from behind (walking up). */
+export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0: number, y0: number, frame: 0 | 1, back = false): void {
   const px = (x: number, y: number, w: number, h: number, c: string) => {
     ctx.fillStyle = c;
     ctx.fillRect(x0 + x, y0 + y, w, h);
@@ -27,9 +27,6 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0:
   const skinD = shade(look.skin, -0.2);
   const hair = look.hairColor;
   const hairD = shade(hair, -0.3);
-  const top = look.topColor;
-  const topD = shade(top, -0.25);
-  const pants = look.pantsColor;
 
   // shadow
   px(2, 19, 8, 1, 'rgba(10,0,30,0.35)');
@@ -42,6 +39,56 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0:
   // head
   px(3, 2, 6, 6, look.skin);
   px(3, 7, 6, 1, skinD);
+  // neck
+  px(5, 8, 2, 1, skinD);
+  if (back) drawBackOfHead(px, look, hair, hairD);
+  else drawFace(px, look, hair, hairD);
+
+  drawTorso(px, look, back);
+  drawLegs(px, look, frame);
+}
+
+type Px = (x: number, y: number, w: number, h: number, c: string) => void;
+
+function drawBackOfHead(px: Px, look: CharLook, hair: string, hairD: string): void {
+  switch (look.hair) {
+    case 'glatze':
+      px(3, 1, 6, 1, look.skin);
+      px(3, 2, 6, 1, shade(look.skin, 0.15)); // shine
+      px(2, 4, 8, 2, hair);
+      break;
+    case 'vokuhila':
+      px(3, 1, 6, 6, hair);
+      px(3, 7, 6, 3, hair); // business in front, party in the back
+      px(4, 9, 4, 1, hairD);
+      break;
+    case 'surfer':
+    case 'dauerwelle':
+      px(2, 0, 8, 9, hair);
+      px(3, 2, 1, 1, hairD);
+      px(7, 4, 1, 1, hairD);
+      px(4, 7, 1, 1, hairD);
+      break;
+    case 'stirnband':
+      px(2, 0, 8, 9, hair);
+      px(2, 3, 8, 1, '#ff3cc8');
+      px(9, 4, 1, 2, '#ff3cc8'); // knot
+      break;
+    case 'dutt':
+      px(3, 1, 6, 6, hair);
+      px(4, 0, 4, 2, hairD); // bun
+      break;
+    case 'flattop':
+      px(3, 0, 6, 6, hair);
+      px(3, 0, 6, 1, shade(hair, 0.2));
+      break;
+    default:
+      px(3, 1, 6, 6, hair);
+      px(4, 1, 3, 1, shade(hair, 0.3));
+  }
+}
+
+function drawFace(px: Px, look: CharLook, hair: string, hairD: string): void {
   // eyes / shades
   if (look.shades) {
     px(3, 4, 6, 1, '#101010');
@@ -90,10 +137,11 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0:
       px(4, 0, 4, 1, hairD);
       break;
   }
+}
 
-  // neck
-  px(5, 8, 2, 1, skinD);
-
+function drawTorso(px: Px, look: CharLook, back: boolean): void {
+  const top = look.topColor;
+  const topD = shade(top, -0.25);
   // torso + arms
   const sleeve = look.top === 'tanktop' || look.top === 'body' ? look.skin : top;
   px(2, 9, 8, 5, top);
@@ -101,6 +149,20 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0:
   px(10, 9, 1, 4, sleeve);
   px(1, 13, 1, 1, look.skin); // hands
   px(10, 13, 1, 1, look.skin);
+  if (back) {
+    // from behind: plain back with a seam, collars and straps where they show
+    if (look.top === 'jackett' || look.top === 'anzug') px(6, 11, 1, 3, topD);
+    if (look.top === 'lederjacke') px(2, 9, 8, 1, topD);
+    if (look.top === 'polo') px(4, 9, 4, 1, shade(top, 0.3));
+    if (look.top === 'tanktop') px(4, 9, 4, 1, look.skin);
+    if (look.top === 'hawaii') {
+      px(3, 11, 1, 1, '#fff3a0');
+      px(7, 10, 1, 1, '#ff5a8a');
+      px(5, 13, 1, 1, '#fff3a0');
+    }
+    if (look.top === 'body') px(2, 13, 8, 1, '#ffe03c');
+    return;
+  }
   switch (look.top) {
     case 'hawaii':
       px(3, 10, 1, 1, '#fff3a0');
@@ -138,7 +200,11 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, look: CharLook, x0:
       break;
   }
   if (look.chain) px(4, 9, 4, 1, '#ffd23c');
+}
 
+function drawLegs(px: Px, look: CharLook, frame: 0 | 1): void {
+  const top = look.topColor;
+  const pants = look.pantsColor;
   // legs
   const legColor = look.top === 'body' ? top : pants;
   const legD = shade(legColor, -0.25);
