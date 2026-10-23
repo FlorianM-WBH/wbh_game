@@ -8,3 +8,10 @@ Newest entries at the bottom.
 - Built M1, the playable vertical slice: deterministic simulation (cars, 10 customer archetypes, negotiation with tactics, workshop repairs and upgrades, tech tree, building upgrades, day cycle, rent, save/load), procedural pixel art for cars, characters and the lot, the lot scene with free movement and interactions, all workplace menus, the negotiation panel, sound effects.
 - Verified: 13 unit tests including a 14-day balance bot; smoke test (16 checks: title, walking, E-interaction, customers, all menus, buying a car, lift repair, no console errors), and checked the screenshots by eye.
 - Learned: Phaser's `JustDown` misses taps shorter than a frame (keyup clears it), so the scene listens to the key's `down` event instead. Fast-forwarding the sim in tests makes scene animations lag behind, which is expected.
+
+## 2026-10-23 – Session 2 (autonomous)
+
+- M2 (feel and content): procedural synthwave background music (`src/music.ts`) with separate sfx/music buses and persisted `M`/`N` toggles; buyer feature wishes with price effects and ★ markers; composed pitch lines (wish have/missing, praise for liked extras, condition remarks); archetype-specific tactic reactions for all 10 archetypes; first-steps tips box (6 steps, `H` hides).
+- M3 (service customers): customers bring their own car for one paid job with a deadline; accept / haggle (+25%) / decline; lift menu for customer cars; tips for early hand-over; missed deadline = car and fee gone. Office shows the count of finished service jobs.
+- Verified: 23 unit tests (new `tests/unit/content.test.ts`: wishes, content completeness, tips, the full service flow, fee > parts, missed deadline); smoke test now 25 checks including an offline render of the music (rms ~0.04, peak ~0.35), the tips box, a wish in the customer menu and the complete service flow; screenshots checked by eye.
+- Learned: `page.evaluate(fn, arg)` silently passes `undefined` if the arg is forgotten, which looked like a sim bug. Vitest only picks up `tests/unit/**`, so throwaway analysis scripts must live there temporarily.
