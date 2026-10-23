@@ -5,6 +5,7 @@ import { COMPONENTS, UPGRADES, type Component } from '../content/workshop';
 import { carTags, freeSlot, lotCars, marketValue, showroomBonus } from './economy';
 import { makeServiceOrder, SERVICE_LAST_MINUTE } from './service';
 import { addRep } from './reputation';
+import { clearLiftFor } from './workshop';
 import { chance, pick, pickWeighted, rand, randInt, randRange } from './rng';
 import { buildingLevel, emit, hasTech, nextId, type Car, type Customer, type GameState, type Intent } from './state';
 
@@ -134,7 +135,7 @@ export function removeCustomer(s: GameState, id: number, reason: 'impatient' | '
     const car = s.cars.find((x) => x.id === c.carId);
     if (car && (car.loc.kind === 'buyin' || car.ownerId === c.id)) {
       s.cars = s.cars.filter((x) => x.id !== car.id);
-      if (s.lift.carId === car.id) s.lift = { carId: null, job: null };
+      clearLiftFor(s, car.id);
       emit(s, { type: 'carRemoved', carId: car.id });
     }
   }

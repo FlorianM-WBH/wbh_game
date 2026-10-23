@@ -50,13 +50,15 @@ function spawnInterval(s: GameState): number {
 export interface TickOptions {
   /** player is helping at the lift */
   workBoost?: number;
+  /** which lift bay the player is helping at */
+  boostBay?: number;
 }
 
 /** Advance the world by `minutes` of game time. Time does not pass during negotiations. */
 export function tick(s: GameState, minutes: number, opts: TickOptions = {}): void {
   if (s.negotiation || s.over) return;
   s.minute += minutes;
-  tickLift(s, minutes, opts.workBoost ?? 1);
+  tickLift(s, minutes, opts.workBoost ?? 1, opts.boostBay ?? 0);
   tickBrowsing(s, minutes);
 
   for (const c of [...s.customers]) {

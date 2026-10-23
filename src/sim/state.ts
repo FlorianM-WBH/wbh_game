@@ -6,7 +6,7 @@ export const SAVE_VERSION = 1;
 export const DAY_START = 8 * 60;
 export const DAY_END = 20 * 60;
 
-export type CarLocation = { kind: 'lot'; slot: number } | { kind: 'lift' } | { kind: 'buyin' };
+export type CarLocation = { kind: 'lot'; slot: number } | { kind: 'lift'; bay?: number } | { kind: 'buyin' };
 
 export interface Car {
   id: number;
@@ -72,6 +72,11 @@ export interface Job {
   total: number;
 }
 
+export interface Lift {
+  carId: number | null;
+  job: Job | null;
+}
+
 export interface Ledger {
   income: number;
   expenses: number;
@@ -117,7 +122,9 @@ export interface GameState {
   money: number;
   cars: Car[];
   customers: Customer[];
-  lift: { carId: number | null; job: Job | null };
+  /** lift bay 0; bay 1 (`lift2`) comes with the workshop upgrade */
+  lift: Lift;
+  lift2?: Lift;
   techs: string[];
   buildings: Record<string, number>;
   stats: Stats;

@@ -17,7 +17,7 @@ export const TIPS: Tip[] = [
   {
     title: 'Ab in die Werkstatt',
     text: 'Drück <span class="key">E</span> an einem Auto auf dem Hof oder an der <b>Hebebühne</b>, um es reinzuholen.',
-    done: (s) => s.lift.carId != null || s.stats.repairsDone + s.stats.upgradesDone > 0,
+    done: (s) => s.lift.carId != null || s.lift2?.carId != null || s.stats.repairsDone + s.stats.upgradesDone > 0,
   },
   {
     title: 'Reparieren oder tunen',

@@ -40,6 +40,8 @@ export const WAIT_SPOTS: Pt[] = [
 export const BUYIN_CAR: Pt = { x: 440, y: 160 };
 export const BUYIN_SELLER: Pt = { x: 470, y: 196 };
 export const LIFT_CAR: Pt = { x: 365, y: 70 };
+/** second bay (workshop level 1+), where the tool wall used to be */
+export const LIFT2_CAR: Pt = { x: 309, y: 70 };
 /** Driveway into the lot; pedestrians arrive along the sidewalk from either side. */
 export const ENTRANCE: Pt = { x: 320, y: 295 };
 export const SIDEWALK_Y = 295;
@@ -48,12 +50,13 @@ export const AISLE_Y = 198;
 export const BUILDING_FRONT_Y = 96;
 export const SIDEWALK_BOTTOM = 300;
 
-export type StationId = 'office' | 'computer' | 'lift';
+export type StationId = 'office' | 'computer' | 'lift' | 'lift2';
 
 export const STATIONS: Record<StationId, Pt & { label: string }> = {
   office: { x: 92, y: 104, label: 'Büro' },
   computer: { x: 196, y: 104, label: 'Computer (Technologie)' },
   lift: { x: 365, y: 104, label: 'Hebebühne' },
+  lift2: { x: 309, y: 104, label: 'Hebebühne 2' },
 };
 
 export const PLAYER_START: Pt = { x: 300, y: 120 };

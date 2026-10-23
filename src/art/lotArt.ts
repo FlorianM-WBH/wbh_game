@@ -143,20 +143,38 @@ export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
   ctx.fillRect(333, 40, 64, 56);
   ctx.fillStyle = '#2e2840';
   for (let i = 0; i < 4; i++) ctx.fillRect(333, 40 + i * 3, 64, 1); // rolled-up door
-  // lift posts
-  ctx.fillStyle = '#ffd23c';
-  ctx.fillRect(345, 52, 3, 44);
-  ctx.fillRect(382, 52, 3, 44);
-  ctx.fillStyle = '#202020';
-  for (let i = 0; i < 6; i++) {
-    ctx.fillRect(345, 54 + i * 7, 3, 2);
-    ctx.fillRect(382, 54 + i * 7, 3, 2);
+  const posts = (x0: number) => {
+    ctx.fillStyle = '#ffd23c';
+    ctx.fillRect(x0, 52, 3, 44);
+    ctx.fillRect(x0 + 37, 52, 3, 44);
+    ctx.fillStyle = '#202020';
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect(x0, 54 + i * 7, 3, 2);
+      ctx.fillRect(x0 + 37, 54 + i * 7, 3, 2);
+    }
+  };
+  posts(345);
+  if (look.werkstatt >= 1) {
+    // second bay with its own door and lift
+    ctx.fillStyle = '#1e1a2a';
+    ctx.fillRect(285, 40, 46, 56);
+    ctx.fillStyle = '#2e2840';
+    for (let i = 0; i < 4; i++) ctx.fillRect(285, 40 + i * 3, 46, 1);
+    posts(289);
+    ctx.fillStyle = '#ffd23c';
+    drawPixelText(ctx, '2', 306, 44, '#ffd23c');
+    // tool wall moves above the chest
+    ctx.fillStyle = '#5a5060';
+    ctx.fillRect(406, 42, 34, 24);
+    ctx.fillStyle = '#c8c8d8';
+    for (let i = 0; i < 5; i++) ctx.fillRect(409 + i * 6, 45, 2, 8 + (i % 2) * 4);
+  } else {
+    // tool wall
+    ctx.fillStyle = '#5a5060';
+    ctx.fillRect(292, 50, 32, 28);
+    ctx.fillStyle = '#c8c8d8';
+    for (let i = 0; i < 5; i++) ctx.fillRect(295 + i * 6, 54, 2, 8 + (i % 2) * 4);
   }
-  // tool wall
-  ctx.fillStyle = '#5a5060';
-  ctx.fillRect(292, 50, 32, 28);
-  ctx.fillStyle = '#c8c8d8';
-  for (let i = 0; i < 5; i++) ctx.fillRect(295 + i * 6, 54, 2, 8 + (i % 2) * 4);
   ctx.fillStyle = '#e83c3c';
   ctx.fillRect(408, 70, 30, 24); // tool chest
   ctx.fillStyle = '#a01e1e';

@@ -6,7 +6,7 @@ import type { Archetype } from '../content/archetypes';
 import { archetypeOf, removeCustomer } from './customers';
 import { chance, pick, randRange } from './rng';
 import { carById, customerById, DAY_END, emit, formatMoney, formatTime, hasTech, type Car, type Customer, type GameState, type ServiceOrder } from './state';
-import type { ActionResult } from './workshop';
+import { liftAt, type ActionResult } from './workshop';
 import { addRep } from './reputation';
 
 /** No new service customers this close to closing time. */
@@ -116,11 +116,12 @@ export function serviceFinished(car: Car, o: ServiceOrder): boolean {
 }
 
 /** Hand the finished car back: the customer pays the fee (plus a tip if early) and drives off. */
-export function completeService(s: GameState): ActionResult & { text?: string } {
-  const car = carById(s, s.lift.carId);
+export function completeService(s: GameState, bay = 0): ActionResult & { text?: string } {
+  const lift = liftAt(s, bay);
+  const car = carById(s, lift.carId);
   const c = ownerOf(s, car);
   if (!car || !c?.service) return { ok: false, reason: 'Das ist kein Kundenauftrag.' };
-  if (s.lift.job) return { ok: false, reason: 'Erst die laufende Arbeit abschließen.' };
+  if (lift.job) return { ok: false, reason: 'Erst die laufende Arbeit abschließen.' };
   if (!serviceFinished(car, c.service)) return { ok: false, reason: 'Der Auftrag ist noch nicht erledigt.' };
   const early = (c.service.due - s.minute) / 60; // hours to spare
   const tip = early >= 1 ? round10(c.service.fee * Math.min(0.25, 0.08 * early)) : 0;

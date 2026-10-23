@@ -6,7 +6,8 @@ import { auctionLots, buyAuctionLot, setPriceTag, tickBrowsing } from '../../src
 import { borrow, CREDIT_LIMIT, debt, GAME_OVER_DEBT, repay } from '../../src/sim/finance';
 import { acceptService } from '../../src/sim/service';
 import { addRep, reputation } from '../../src/sim/reputation';
-import { buyTech } from '../../src/sim/progression';
+import { buyBuilding, buyTech } from '../../src/sim/progression';
+import { liftAt, liftCount, putOnLift, startRepair, takeOffLift } from '../../src/sim/workshop';
 import { startSale, makeOffer } from '../../src/sim/negotiation';
 import type { GameState } from '../../src/sim/state';
 
@@ -146,5 +147,44 @@ describe('reputation', () => {
     expect(customerRate(s)).toBeGreaterThan(r);
     addRep(s, 1000);
     expect(reputation(s)).toBe(100);
+  });
+});
+
+describe('second lift', () => {
+  it('comes with the workshop upgrade and runs jobs in parallel', () => {
+    const s = newGame(15);
+    s.money = 100000;
+    const [a, b] = s.cars;
+    expect(putOnLift(s, a.id).ok).toBe(true);
+    expect(putOnLift(s, b.id).ok).toBe(false);
+    expect(buyBuilding(s, 'werkstatt').ok).toBe(true);
+    expect(liftCount(s)).toBe(2);
+    expect(putOnLift(s, b.id).ok).toBe(true);
+    expect(b.loc).toEqual({ kind: 'lift', bay: 1 });
+    a.cond.motor = 20;
+    b.cond.reifen = 20;
+    expect(startRepair(s, 'motor', 0).ok).toBe(true);
+    expect(startRepair(s, 'reifen', 1).ok).toBe(true);
+    tick(s, 400);
+    expect(a.cond.motor).toBe(100);
+    expect(b.cond.reifen).toBe(100);
+    expect(takeOffLift(s, 1).ok).toBe(true);
+    expect(liftAt(s, 1).carId).toBeNull();
+    expect(b.loc.kind).toBe('lot');
+  });
+
+  it('the player boost only speeds up the bay they help at', () => {
+    const s = newGame(16);
+    s.money = 100000;
+    buyBuilding(s, 'werkstatt');
+    const [a, b] = s.cars;
+    putOnLift(s, a.id, 0);
+    putOnLift(s, b.id, 1);
+    a.cond.motor = 10;
+    b.cond.motor = 10;
+    startRepair(s, 'motor', 0);
+    startRepair(s, 'motor', 1);
+    tick(s, 10, { workBoost: 3, boostBay: 1 });
+    expect(liftAt(s, 1).job!.minutesLeft).toBeLessThan(liftAt(s, 0).job!.minutesLeft);
   });
 });

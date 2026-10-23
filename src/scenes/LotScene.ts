@@ -12,6 +12,7 @@ import {
   makePalmTexture,
 } from '../art/textures';
 import { lotCapacity } from '../sim/economy';
+import { bays, liftAt, liftCount } from '../sim/workshop';
 import { buildingLevel, carById, customerById, formatTime, type Car, type SimEvent } from '../sim/state';
 import {
   AISLE_Y,
@@ -19,6 +20,7 @@ import {
   BUYIN_SELLER,
   ENTRANCE,
   LIFT_CAR,
+  LIFT2_CAR,
   PALMS,
   PLAYER_START,
   SIDEWALK_Y,
@@ -166,7 +168,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       const p = SLOTS[car.loc.slot];
       return { p, angle: car.loc.slot >= 6 ? 180 : 0 };
     }
-    if (car.loc.kind === 'lift') return { p: LIFT_CAR, angle: 0 };
+    if (car.loc.kind === 'lift') return { p: car.loc.bay === 1 ? LIFT2_CAR : LIFT_CAR, angle: 0 };
     return { p: BUYIN_CAR, angle: 0 };
   }
 
@@ -417,9 +419,11 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     const act = this.keys.e.isDown || this.keys.space.isDown;
     const justAct = this.actPressed;
     this.actPressed = false;
-    const atLift = this.target?.kind === 'station' && this.target.id === 'lift';
-    this.app.helping = free && atLift && act && !!this.app.state.lift.job;
-    if (justAct && this.target && !(atLift && this.app.state.lift.job)) this.app.interact(this.target);
+    const bay = this.target?.kind === 'station' ? (this.target.id === 'lift' ? 0 : this.target.id === 'lift2' ? 1 : -1) : -1;
+    const busy = bay >= 0 && !!liftAt(this.app.state, bay).job;
+    if (bay >= 0) this.app.helpBay = bay;
+    this.app.helping = free && busy && act;
+    if (justAct && this.target && !busy) this.app.interact(this.target);
 
     this.app.update(dtMs);
     this.updateNpcs(dt);
@@ -433,6 +437,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     let best: Target | null = null;
     let bestD = REACH;
     for (const id of Object.keys(STATIONS) as StationId[]) {
+      if (id === 'lift2' && liftCount(this.app.state) < 2) continue;
       const st = STATIONS[id];
       const d = Math.hypot(st.x - px, st.y - py);
       if (d < bestD) {
@@ -531,11 +536,15 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     }
     // welding sparks while a job runs
     this.sparks.clear();
-    if (this.app.state.lift.job && this.app.started && !this.app.ui.isOpen) {
-      const n = this.app.helping ? 8 : 3;
-      for (let i = 0; i < n; i++) {
-        this.sparks.fillStyle(Math.random() < 0.5 ? 0xffe03c : 0xffffff, 1);
-        this.sparks.fillRect(LIFT_CAR.x - 10 + Math.random() * 20, LIFT_CAR.y - 8 + Math.random() * 24, 1, 1);
+    if (this.app.started && !this.app.ui.isOpen) {
+      for (const b of bays(this.app.state)) {
+        if (!liftAt(this.app.state, b).job) continue;
+        const p = b ? LIFT2_CAR : LIFT_CAR;
+        const n = this.app.helping && this.app.helpBay === b ? 8 : 3;
+        for (let i = 0; i < n; i++) {
+          this.sparks.fillStyle(Math.random() < 0.5 ? 0xffe03c : 0xffffff, 1);
+          this.sparks.fillRect(p.x - 10 + Math.random() * 20, p.y - 8 + Math.random() * 24, 1, 1);
+        }
       }
     }
   }

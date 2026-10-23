@@ -53,7 +53,7 @@ export const BUILDINGS: BuildingUpgrade[] = [
     id: 'werkstatt',
     name: 'Werkstatt',
     costs: [8000, 20000],
-    desc: ['Garage', 'Profi-Werkstatt: 25% schneller', 'Tuning-Halle: 50% schneller'],
+    desc: ['Garage mit einer Hebebühne', 'Profi-Werkstatt: 2. Hebebühne, 25% schneller', 'Tuning-Halle: 2 Hebebühnen, 50% schneller'],
   },
   {
     id: 'neonschild',

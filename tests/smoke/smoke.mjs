@@ -288,6 +288,39 @@ try {
   await page.waitForTimeout(3000);
   await page.screenshot({ path: path.join(out, '21-auction-car-delivered.png') });
 
+  // workshop upgrade via the office menu: a second lift, both bays working
+  await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'office' }));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('3');
+  await page.waitForTimeout(150);
+  check((await page.evaluate(() => window.__mm.state.buildings.werkstatt)) === 1, 'workshop upgraded');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  const lotIds = await page.evaluate(() => {
+    const mm = window.__mm;
+    const lot = mm.state.cars.filter((c) => c.loc.kind === 'lot');
+    for (const c of lot) c.cond.motor = 30;
+    return lot.slice(0, 2).map((c) => c.id);
+  });
+  for (const id of lotIds) {
+    await page.evaluate((id) => window.__mm.interact({ kind: 'car', carId: id }), id);
+    await page.waitForTimeout(150);
+    await page.keyboard.press('1');
+    await page.waitForTimeout(150);
+  }
+  for (const id of ['lift', 'lift2']) {
+    await page.evaluate((id) => window.__mm.interact({ kind: 'station', id }), id);
+    await page.waitForTimeout(150);
+    await page.keyboard.press('1');
+    await page.waitForTimeout(150);
+  }
+  check((await page.evaluate(() => !!window.__mm.state.lift.job && !!window.__mm.state.lift2?.job)), 'jobs run on both lifts');
+  await page.evaluate(() => window.__mm.teleport(309, 112));
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: path.join(out, '21b-two-lifts.png') });
+
   // loan shark from the office
   await page.evaluate(() => window.__mm.interact({ kind: 'station', id: 'office' }));
   await page.waitForTimeout(150);

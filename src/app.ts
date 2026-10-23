@@ -20,7 +20,7 @@ import { borrow, CREDIT_LIMIT, DAILY_INTEREST, debt, GAME_OVER_DEBT, repay, WARN
 import { repLabel, repStars, reputation } from './sim/reputation';
 import { GAME_OVER_TEXT, SHARK_GREET, SHARK_NAME, SHARK_WARN } from './content/market';
 import { buildingLevel, carById, customerById, drainEvents, formatMoney, formatTime, hasTech, type Car, type Customer, type GameState, type SimEvent } from './sim/state';
-import { availableUpgrades, liftCar, putOnLift, startRepair, startUpgrade, takeOffLift, type ActionResult } from './sim/workshop';
+import { availableUpgrades, bays, freeBay, liftAt, liftCar, putOnLift, startRepair, startUpgrade, takeOffLift, type ActionResult } from './sim/workshop';
 import { conditionHtml, openNegotiation } from './ui/negotiationPanel';
 import { esc, h, UI, type MenuOption } from './ui/ui';
 import type { StationId } from './scenes/layout';
@@ -45,6 +45,8 @@ export class App {
   scene: SceneHooks | null = null;
   /** set by the scene while the player holds the action key at the lift */
   helping = false;
+  /** the lift bay the player is standing at */
+  helpBay = 0;
   private wonShown = false;
   tipsHidden = false;
 
@@ -159,7 +161,7 @@ export class App {
   update(dtMs: number): void {
     if (!this.started || this.ui.isOpen) return;
     const minutes = Math.min(dtMs, 100) * TIME_SCALE;
-    tick(this.state, minutes, { workBoost: this.helping && this.state.lift.job ? WORK_BOOST : 1 });
+    tick(this.state, minutes, { workBoost: this.helping && liftAt(this.state, this.helpBay).job ? WORK_BOOST : 1, boostBay: this.helpBay });
     this.flush();
   }
 
@@ -201,10 +203,11 @@ export class App {
   promptFor(t: Target): string {
     const s = this.state;
     if (t.kind === 'station') {
-      if (t.id === 'lift') {
-        const job = s.lift.job;
-        if (job) return `Hebebühne – mit anpacken (halten): ${Math.round(100 - (job.minutesLeft / job.total) * 100)}%`;
-        return 'Hebebühne';
+      if (t.id === 'lift' || t.id === 'lift2') {
+        const name = t.id === 'lift2' ? 'Hebebühne 2' : 'Hebebühne';
+        const job = liftAt(s, t.id === 'lift2' ? 1 : 0).job;
+        if (job) return `${name} – mit anpacken (halten): ${Math.round(100 - (job.minutesLeft / job.total) * 100)}%`;
+        return name;
       }
       return t.id === 'office' ? 'Büro' : 'Computer: Technologie';
     }
@@ -222,7 +225,7 @@ export class App {
     if (t.kind === 'station') {
       if (t.id === 'office') this.officeMenu();
       else if (t.id === 'computer') this.techMenu();
-      else this.liftMenu();
+      else this.liftMenu(t.id === 'lift2' ? 1 : 0);
     } else if (t.kind === 'car') this.carMenu(t.carId);
     else this.customerMenu(t.customerId);
   }
@@ -421,14 +424,15 @@ export class App {
 
   // ---------- workshop ----------
 
-  liftMenu(): void {
+  liftMenu(bay = 0): void {
     const s = this.state;
-    const car = liftCar(s);
+    const car = liftCar(s, bay);
+    const title = bay ? 'Hebebühne 2' : 'Hebebühne';
     if (!car) {
       const order = s.customers.find((c) => c.service?.accepted && carById(s, c.carId)?.loc.kind === 'buyin');
       const cars = order ? [carById(s, order.carId)!, ...lotCars(s)] : lotCars(s);
       this.ui.menu({
-        title: 'Hebebühne',
+        title,
         sub: 'Die Hebebühne ist leer. Welchen Wagen holen wir rein?',
         options: cars.map((c) => ({
           label: c.ownerId != null ? `Kundenauftrag: ${MODEL_BY_ID[c.modelId].name}` : MODEL_BY_ID[c.modelId].name,
@@ -437,9 +441,9 @@ export class App {
               ? `${serviceJobLabel(order.service)} · Abholung ${formatTime(order.service.due)} · ${formatMoney(order.service.fee)}`
               : `Zustand: ${Math.round(COMPONENTS.reduce((a, k) => a + c.cond[k], 0) / 4)}% · Wert ${formatMoney(marketValue(c))}`,
           action: () => {
-            if (this.result(putOnLift(s, c.id))) {
+            if (this.result(putOnLift(s, c.id, bay))) {
               this.flush();
-              this.liftMenu();
+              this.liftMenu(bay);
             }
           },
         })),
@@ -447,9 +451,9 @@ export class App {
       return;
     }
     const owner = ownerOf(s, car);
-    if (owner?.service) return this.serviceLiftMenu(car, owner);
+    if (owner?.service) return this.serviceLiftMenu(car, owner, bay);
     const model = MODEL_BY_ID[car.modelId];
-    const job = s.lift.job;
+    const job = liftAt(s, bay).job;
     const head =
       `<p><b>${esc(model.name)}</b> · Wert jetzt: <b>${formatMoney(marketValue(car))}</b> · investiert: ${formatMoney(car.invested)}</p>` +
       `<p>${conditionHtml(s, car, true)}</p>` +
@@ -458,7 +462,7 @@ export class App {
       const label = job.kind === 'repair' ? COMPONENT_LABEL[job.target as keyof typeof COMPONENT_LABEL] : UPGRADE_BY_ID[job.target].name;
       const pct = Math.round(100 - (job.minutesLeft / job.total) * 100);
       this.ui.menu({
-        title: 'Hebebühne',
+        title,
         body: head + `<p>In Arbeit: <b>${esc(label)}</b> – ${pct}% (noch ca. ${Math.ceil(job.minutesLeft)} Min.)</p><p>Tipp: <span class="key">E</span> an der Hebebühne gedrückt halten, um mit anzupacken (3× schneller).</p>`,
         options: [],
       });
@@ -474,11 +478,11 @@ export class App {
         right: formatMoney(q.cost),
         disabled: q.cost > s.money,
         action: () => {
-          if (this.result(startRepair(s, comp))) this.ui.close();
+          if (this.result(startRepair(s, comp, bay))) this.ui.close();
         },
       });
     }
-    for (const u of availableUpgrades(s)) {
+    for (const u of availableUpgrades(s, bay)) {
       const q = upgradeQuote(s, u.id);
       options.push({
         label: `Einbauen: ${u.name}`,
@@ -486,7 +490,7 @@ export class App {
         right: formatMoney(q.cost),
         disabled: q.cost > s.money,
         action: () => {
-          if (this.result(startUpgrade(s, u.id))) this.ui.close();
+          if (this.result(startUpgrade(s, u.id, bay))) this.ui.close();
         },
       });
     }
@@ -496,24 +500,24 @@ export class App {
       disabled: freeSlot(s) === null,
       desc: freeSlot(s) === null ? 'Kein freier Stellplatz!' : undefined,
       action: () => {
-        if (this.result(takeOffLift(s))) {
+        if (this.result(takeOffLift(s, bay))) {
           this.flush();
           this.ui.close();
         }
       },
     });
     this.ui.menu({
-      title: 'Hebebühne',
+      title,
       body: head + (locked ? `<p class="sub">${locked} weitere Extras lassen sich am Computer freischalten.</p>` : ''),
       options,
     });
   }
 
   /** The lift with a customer's car: only the ordered job, then hand it back. */
-  serviceLiftMenu(car: Car, owner: Customer): void {
+  serviceLiftMenu(car: Car, owner: Customer, bay = 0): void {
     const s = this.state;
     const o = owner.service!;
-    const job = s.lift.job;
+    const job = liftAt(s, bay).job;
     const done = serviceFinished(car, o);
     const head =
       `<p>Kundenauftrag von <b>${esc(owner.name)}</b>: <b>${esc(MODEL_BY_ID[car.modelId].name)}</b></p>` +
@@ -521,7 +525,7 @@ export class App {
     if (job) {
       const pct = Math.round(100 - (job.minutesLeft / job.total) * 100);
       this.ui.menu({
-        title: 'Hebebühne',
+        title: bay ? 'Hebebühne 2' : 'Hebebühne',
         body: head + `<p>In Arbeit: ${pct}% (noch ca. ${Math.ceil(job.minutesLeft)} Min.)</p><p>Tipp: <span class="key">E</span> an der Hebebühne gedrückt halten, um mit anzupacken (3× schneller).</p>`,
         options: [],
       });
@@ -534,7 +538,7 @@ export class App {
         desc: 'Früh fertig = Trinkgeld.',
         right: formatMoney(o.fee),
         action: () => {
-          const r = completeService(s);
+          const r = completeService(s, bay);
           if (this.result(r, 'cash')) {
             this.flush();
             this.ui.menu({ title: owner.name, body: `<p>„${esc(r.text ?? '')}“</p>`, options: [] });
@@ -549,7 +553,7 @@ export class App {
         right: formatMoney(q.cost),
         disabled: q.cost > s.money,
         action: () => {
-          const r = o.kind === 'repair' ? startRepair(s, o.target as keyof typeof COMPONENT_LABEL) : startUpgrade(s, o.target);
+          const r = o.kind === 'repair' ? startRepair(s, o.target as keyof typeof COMPONENT_LABEL, bay) : startUpgrade(s, o.target, bay);
           if (this.result(r)) this.ui.close();
         },
       });
@@ -557,14 +561,14 @@ export class App {
         label: 'Zurück in die Ankauf-Zone stellen',
         desc: 'Macht die Hebebühne frei. Der Auftrag bleibt offen.',
         action: () => {
-          if (this.result(takeOffLift(s))) {
+          if (this.result(takeOffLift(s, bay))) {
             this.flush();
             this.ui.close();
           }
         },
       });
     }
-    this.ui.menu({ title: 'Hebebühne – Kundenauftrag', body: head, options });
+    this.ui.menu({ title: `${bay ? 'Hebebühne 2' : 'Hebebühne'} – Kundenauftrag`, body: head, options });
   }
 
   carMenu(carId: number): void {
@@ -577,8 +581,8 @@ export class App {
     if (onLot) {
       options.push({
         label: 'In die Werkstatt fahren',
-        disabled: s.lift.carId != null,
-        desc: s.lift.carId != null ? 'Die Hebebühne ist belegt.' : 'Stellt den Wagen auf die Hebebühne.',
+        disabled: freeBay(s) == null,
+        desc: freeBay(s) == null ? 'Alle Hebebühnen sind belegt.' : 'Stellt den Wagen auf eine freie Hebebühne.',
         action: () => {
           if (this.result(putOnLift(s, car.id))) {
             this.flush();
@@ -604,8 +608,8 @@ export class App {
             ? [
                 {
                   label: 'In die Werkstatt fahren',
-                  disabled: s.lift.carId != null,
-                  desc: s.lift.carId != null ? 'Die Hebebühne ist belegt. Erst den Wagen dort runterholen.' : undefined,
+                  disabled: freeBay(s) == null,
+                  desc: freeBay(s) == null ? 'Alle Hebebühnen sind belegt. Erst einen Wagen runterholen.' : undefined,
                   action: () => {
                     if (this.result(putOnLift(s, car.id))) {
                       this.flush();
@@ -807,12 +811,14 @@ export class App {
       if (this.hudHtml) this.ui.hud.innerHTML = this.hudHtml = '';
       return;
     }
-    const job = s.lift.job;
-    const jobHtml = job
-      ? `<span class="job">Werkstatt <span class="bar"><i style="width:${Math.round(100 - (job.minutesLeft / job.total) * 100)}%"></i></span></span>`
-      : s.lift.carId != null
-        ? '<span class="job">Werkstatt: bereit</span>'
-        : '';
+    const jobHtml = bays(s)
+      .map((b) => {
+        const lift = liftAt(s, b);
+        const name = b ? 'Bühne 2' : bays(s).length > 1 ? 'Bühne 1' : 'Werkstatt';
+        if (lift.job) return `<span class="job">${name} <span class="bar"><i style="width:${Math.round(100 - (lift.job.minutesLeft / lift.job.total) * 100)}%"></i></span></span>`;
+        return lift.carId != null ? `<span class="job">${name}: bereit</span>` : '';
+      })
+      .join('');
     const html =
       `<span class="money ${s.money < 0 ? 'neg' : ''}">${formatMoney(s.money)}</span>` +
       `<span>Tag ${s.day}</span><span class="clock">${formatTime(s.minute)}</span>` +
