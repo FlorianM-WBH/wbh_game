@@ -333,6 +333,17 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(100);
 
+  // night: neon and street lights
+  await page.evaluate(() => {
+    const mm = window.__mm;
+    mm.state.buildings.neonschild = 1;
+    mm.state.buildings.kaffeebar = 1;
+    mm.state.minute = 19 * 60 + 20;
+    mm.app.scene.rebuildAll();
+  });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: path.join(out, '22b-night.png') });
+
   // evening
   await page.evaluate(() => window.__mm.advance(560));
   await page.waitForTimeout(300);

@@ -1,7 +1,7 @@
 // The dealership lot background: buildings, asphalt, street, beach.
 import { drawPixelText, textWidth } from './font';
 import { shade } from './carArt';
-import { BUYIN_CAR, SLOTS, WORLD_H, WORLD_W } from '../scenes/layout';
+import { BUYIN_CAR, LAMPS, SLOTS, WORLD_H, WORLD_W } from '../scenes/layout';
 
 export interface LotLook {
   slots: number;
@@ -267,6 +267,17 @@ export function drawLot(ctx: CanvasRenderingContext2D, look: LotLook): void {
   for (let x = 0; x < WORLD_W; x += 16) ctx.fillRect(x + ((x / 16) % 2) * 6, 345, 6, 1);
   ctx.fillStyle = '#1aa0c0';
   ctx.fillRect(0, 352, WORLD_W, 8);
+
+  // street lamps: post plus a lamp head that hangs over the sidewalk
+  for (const l of LAMPS) {
+    ctx.fillStyle = 'rgba(10,0,30,0.3)';
+    ctx.fillRect(l.x - 2, l.y, 6, 2);
+    ctx.fillStyle = '#5a5a7a';
+    ctx.fillRect(l.x, l.y - 34, 2, 34);
+    ctx.fillRect(l.x, l.y - 34, 7, 2);
+    ctx.fillStyle = '#fff2c0';
+    ctx.fillRect(l.x + 5, l.y - 32, 3, 2);
+  }
 
   if (look.deko) {
     drawFlamingo(ctx, 262, 128);

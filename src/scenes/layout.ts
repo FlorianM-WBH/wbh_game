@@ -68,6 +68,14 @@ export const STATIC_COLLIDERS: Rect[] = [
   { x: 187, y: 97, w: 18, h: 4 }, // computer kiosk
 ];
 
+/** Street lamps on the front sidewalk (base of the post). */
+export const LAMPS: Pt[] = [
+  { x: 66, y: 296 },
+  { x: 174, y: 296 },
+  { x: 474, y: 296 },
+  { x: 580, y: 296 },
+];
+
 export const PALMS: Pt[] = [
   { x: 14, y: 292 },
   { x: 120, y: 296 },

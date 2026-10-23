@@ -9,6 +9,7 @@ import {
   ensureCharTexture,
   ensureCustomerTexture,
   makeGlowTexture,
+  makeLightTexture,
   makePalmTexture,
 } from '../art/textures';
 import { lotCapacity } from '../sim/economy';
@@ -17,6 +18,7 @@ import { buildingLevel, carById, customerById, formatTime, type Car, type SimEve
 import {
   AISLE_Y,
   BUYIN_CAR,
+  LAMPS,
   BUYIN_SELLER,
   ENTRANCE,
   LIFT_CAR,
@@ -65,6 +67,8 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   private npcs = new Map<number, NpcView>();
   private ghosts: NpcView[] = [];
   private tint!: Phaser.GameObjects.Rectangle;
+  /** night lights: additive glow blobs that fade in at dusk */
+  private nightLights: { img: Phaser.GameObjects.Image; a: number; when?: () => boolean }[] = [];
   private sparks!: Phaser.GameObjects.Graphics;
   private tags!: Phaser.GameObjects.Graphics;
   /** short-lived speech bubbles (customer id -> text and expiry in scene time) */
@@ -86,6 +90,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
   create(): void {
     makePalmTexture(this);
     makeGlowTexture(this);
+    makeLightTexture(this);
     ensureCharTexture(this, 'player', PLAYER_LOOK);
     this.redrawLot();
     this.add.image(0, 0, 'lot').setOrigin(0).setDepth(-1000);
@@ -95,6 +100,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     this.sparks = this.add.graphics().setDepth(5000);
     this.tags = this.add.graphics().setDepth(4000);
     this.tint = this.add.rectangle(0, 0, WORLD_W, WORLD_H, 0xff6a3c, 0).setOrigin(0).setDepth(9000);
+    this.makeLights();
 
     const K = Phaser.Input.Keyboard.KeyCodes;
     const kb = this.input.keyboard!;
@@ -121,6 +127,29 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
     this.app.attachScene(this);
     this.rebuildAll();
     this.game.events.emit('lot-ready');
+  }
+
+  private makeLights(): void {
+    const s = () => this.app.state;
+    const light = (x: number, y: number, sx: number, sy: number, color: number, a: number, when?: () => boolean) => {
+      const img = this.add.image(x, y, 'light').setScale(sx / 2, sy * 0.75).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(9001).setAlpha(0);
+      this.nightLights.push({ img, a, when });
+    };
+    for (const l of LAMPS) light(l.x + 6, l.y - 22, 1.8, 1.2, 0xffd890, 0.7);
+    for (const l of LAMPS) light(l.x + 6, l.y - 2, 2.6, 0.7, 0xffd890, 0.45);
+    for (const l of LAMPS) light(l.x + 6, l.y - 31, 0.3, 0.15, 0xffffff, 0.9);
+    light(130, 25, 5, 0.8, 0xff3cc8, 1, () => buildingLevel(s(), 'neonschild') > 0);
+    light(BUYIN_CAR.x, BUYIN_CAR.y - 37, 2, 0.6, 0x3cf0e0, 0.8);
+    light(130, 91, 8, 0.12, 0x3cd8c8, 0.5);
+    light(186, 66, 3.8, 1.1, 0xffc890, 0.35);
+    light(365, 70, 2.2, 1.1, 0xd0e0ff, 0.3);
+    light(308, 70, 1.6, 1.1, 0xd0e0ff, 0.3, () => buildingLevel(s(), 'werkstatt') > 0);
+    light(590, 72, 2.4, 1, 0xff5ad8, 0.8, () => buildingLevel(s(), 'kaffeebar') > 0);
+  }
+
+  /** 0 by day, rising to 1 between 17:00 and 19:00. */
+  private night(): number {
+    return Math.max(0, Math.min(1, (this.app.state.minute - 17 * 60) / 120));
   }
 
   // ---------- building the view from state ----------
@@ -520,7 +549,7 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       v.spr.setDepth(car?.loc.kind === 'lift' ? 50 : v.spr.y + len / 2);
       if (v.glow) {
         v.glow.setPosition(v.spr.x, v.spr.y).setAngle(v.spr.angle);
-        v.glow.setDepth(v.spr.depth - 0.5).setAlpha(0.55 + 0.25 * Math.sin(t * 3 + id));
+        v.glow.setDepth(v.spr.depth - 0.5).setAlpha(Math.min(1, (0.55 + 0.25 * Math.sin(t * 3 + id)) * (1 + 0.5 * this.night())));
       }
     }
     // price tags: a little swinging yellow card on the windscreen
@@ -562,6 +591,9 @@ export class LotScene extends Phaser.Scene implements SceneHooks {
       a = Math.min(0.38, 0.22 + ((m - 18 * 60) / 120) * 0.16);
     }
     this.tint.setFillStyle(color, a);
+    const n = this.app.started ? this.night() : 0;
+    const flicker = 0.92 + 0.08 * Math.sin(this.time.now / 90);
+    for (const l of this.nightLights) l.img.setAlpha(n > 0 && (!l.when || l.when()) ? l.a * n * flicker : 0);
 
     const canvas = this.game.canvas;
     const frame = canvas.parentElement!.parentElement!;
